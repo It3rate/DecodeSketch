@@ -27,6 +27,8 @@ class SketchEncoder:
         self.constraints = {}
         self.dimensions = {}
 
+        self.offsetParams = []
+
         self.encodeFromSketch()
         TurtleUtils.selectEntity(self.sketch)
 
@@ -180,9 +182,7 @@ class SketchEncoder:
             result = "MI" + self.encodeEntities(cCon.point,cCon.midPointCurve)
         elif(tp is f.OffsetConstraint):
             cCon:f.OffsetConstraint = con
-            result = "OC" + self.encodeEntities(cCon.childCurves) # need to replace these curves when the offset if regenerated
-            result += "','"
-            result += "OF" + self.encodeEntities(cCon.parentCurves, cCon.distance)
+            result += "OF" + self.encodeEntities(cCon.parentCurves, cCon.distance, cCon.childCurves)
         elif(tp is f.SmoothConstraint):
             cCon:f.SmoothConstraint = con
             result = "SM" + self.encodeEntities(cCon.curveOne, cCon.curveTwo)
@@ -204,35 +204,40 @@ class SketchEncoder:
         tp = type(dim)
         if(tp == f.SketchLinearDimension):
             tdim:f.SketchLinearDimension = dim
-            result = "SLD" + self.encodeEntities(tdim.entityOne,tdim.entityTwo) + self.encodeExpression(tdim.parameter)
+            result = "SLD" + self.encodeEntities(tdim.entityOne,tdim.entityTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchOffsetDimension):
             tdim:f.SketchOffsetDimension = dim
-            result = "SOD" + self.encodeEntities(tdim.line,tdim.entityTwo) + self.encodeExpression(tdim.parameter)
+            result = "SOD" + self.encodeEntities(tdim.line,tdim.entityTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchAngularDimension):
             tdim:f.SketchAngularDimension = dim
-            result = "SAD" + self.encodeEntities(tdim.lineOne,tdim.lineTwo) + self.encodeExpression(tdim.parameter)
+            result = "SAD" + self.encodeEntities(tdim.lineOne,tdim.lineTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchDiameterDimension):
             tdim:f.SketchDiameterDimension = dim
-            result = "SDD" + self.encodeEntities(tdim.entity) + self.encodeExpression(tdim.parameter)
+            result = "SDD" + self.encodeEntities(tdim.entity) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchRadialDimension):
             tdim:f.SketchRadialDimension = dim
-            result = "SRD" + self.encodeEntities(tdim.entity) + self.encodeExpression(tdim.parameter)
+            result = "SRD" + self.encodeEntities(tdim.entity) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchEllipseMajorRadiusDimension):
             tdim:f.SketchEllipseMajorRadiusDimension = dim
-            result = "SMA" + self.encodeEntities(tdim.ellipse) + self.encodeExpression(tdim.parameter)
+            result = "SMA" + self.encodeEntities(tdim.ellipse) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchEllipseMinorRadiusDimension):
             tdim:f.SketchEllipseMinorRadiusDimension = dim
-            result = "SMI" + self.encodeEntities(tdim.ellipse) + self.encodeExpression(tdim.parameter)
+            result = "SMI" + self.encodeEntities(tdim.ellipse) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchConcentricCircleDimension):
             tdim:f.SketchConcentricCircleDimension = dim
-            result = "SCC" + self.encodeEntities(tdim.circleOne,tdim.circleTwo) + self.encodeExpression(tdim.parameter)
+            result = "SCC" + self.encodeEntities(tdim.circleOne,tdim.circleTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+
+        elif(tp == f.SketchOffsetCurvesDimension):
+            tdim:f.SketchOffsetCurvesDimension = dim
+            result = "SOC" + self.encodeEntities(tdim.offsetConstraint) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+
         else:
             print("*** Dimension not parsed: " + str(tp))
 
@@ -265,6 +270,8 @@ class SketchEncoder:
             for c in entity:
                 result += sep + str(self.curveValues.index(c))
                 sep = "|"
+        elif type(entity) == f.OffsetConstraint:
+            result = "o" + str(list(self.constraints).index(entity.entityToken))
         else:
             result = self.encodeExpression(entity)
 

@@ -126,22 +126,30 @@ class SketchDecoder:
                 elif(kind == "OF"):
                     # offsets are weird, but this helps a lot: https://forums.autodesk.com/t5/fusion-360-api-and-scripts/create-a-parametric-curves-offset-from-python-api/m-p/9391531
                     try:
-                        self.offsetChildren = p2 # get list of child curves that are about to be replaced by an offset constraint 
-                        dirPoint = self.offsetChildren[0].startSketchPoint.geometry 
+                        c0 = p2[0]
+                        if type(c0) == f.SketchCircle:
+                            dirPoint = c0.geometry.center
+                            dist = -abs(p1[0])
+                        else:
+                            dirPoint = c0.startSketchPoint.geometry
+                            dist = abs(p1[0])
+
+                        #dirPoint = c0.geometry.center if type(c0) == f.SketchCircle else c0.startSketchPoint.geometry 
                         oc = core.ObjectCollection.create()
                         for c in p0:
                             oc.add(c)
                         # the direction is set by the dirPoint geometry afaict, so distance is always positive relative to that
-                        offsetCurves = self.sketch.offset(oc, dirPoint, abs(p1[0])) 
-                        # now remove matching elements from self.offsetChildren and clear that list
-                        for rc in self.offsetChildren:
+                        # this will generate new curves
+                        offsetCurves = self.sketch.offset(oc, dirPoint, dist) 
+                        
+                        # now remove matching elements that were generated
+                        for rc in p2:
                             for curve in offsetCurves:
                                 if(TurtlePath.isEquivalentLine(curve, rc, 0.01)):
                                     idx = self.curves.index(rc)
                                     self.curves[idx] = curve
                                     rc.deleteMe()
                                     break
-                        self.offsetChildren.clear()
                         self.offsetRefs[index] = self.sketch.parentComponent.modelParameters[self.sketch.parentComponent.modelParameters.count - 1]
                     except:
                         print('Failed:\n{}'.format(traceback.format_exc()))
@@ -168,25 +176,27 @@ class SketchDecoder:
             p3 = params[3] if len(params) > 3 else None
 
             if kind == "SLD":
-                dimension = dimensions.addDistanceDimension(p0, p1, orientation, self.textPoint(p0,p1))
+                dimension = dimensions.addDistanceDimension(p0, p1, orientation,self.asPoint3D(p3))# self.textPoint(p0,p1))
                 dimension.parameter.expression = p2
             elif kind == "SOD":
-                dimension = dimensions.addOffsetDimension(p0,p1, self.textPoint(p0,p1))
+                dimension = dimensions.addOffsetDimension(p0,p1,self.asPoint3D(p3))# self.textPoint(p0,p1))
                 dimension.parameter.expression = p2
-            # elif kind == "SAD":
-            #     dimension = dimensions.(p0,p1,p2)
+            elif kind == "SAD": # SketchAngularDimension
+                midText = self.textPoint(p0, p1) # this must be mid centers as the quadrant dimensioned is based on the text postion.
+                dimension = dimensions.addAngularDimension(p0,p1, midText)
+                dimension.parameter.expression = p2
             elif kind == "SDD":
-                dimension = dimensions.addDiameterDimension(p0, self.textPoint(p0.geometry.center))
+                dimension = dimensions.addDiameterDimension(p0, self.asPoint3D(p3)) # self.textPoint(p0.geometry.center))
                 dimension.parameter.expression = p1
-            # elif kind == "SRD":
+            # elif kind == "SRD": # SketchRadialDimension
             #     dimension = dimensions.(p0,p1,p2)
-            # elif kind == "SMA":
+            # elif kind == "SMA": # SketchEllipseMajorRadiusDimension
             #     dimension = dimensions.(p0,p1,p2)
-            # elif kind == "SMI":
+            # elif kind == "SMI": # SketchEllipseMinorRadiusDimension
             #     dimension = dimensions.(p0,p1,p2)
-            # elif kind == "SCC":
+            # elif kind == "SCC": # SketchConcentricCircleDimension
             #     dimension = dimensions.(p0,p1,p2)
-            elif kind == "SOC":
+            elif kind == "SOC": # SketchOffsetCurvesDimension
                 parameter = self.offsetRefs[p0] 
                 parameter.expression = p1
 
