@@ -1,7 +1,7 @@
 import adsk.core, adsk.fusion, adsk.cam, traceback
 import tkinter as tk
 
-__decimalPlaces__ = 8
+__decimalPlaces__ = 3
 
 class TurtleUtils:
     def __init__(self):
@@ -60,7 +60,11 @@ class TurtleUtils:
     def getClipboardText(cls):
         root = tk.Tk()
         root.withdraw()
-        return root.clipboard_get()
+        try:
+            result = root.clipboard_get()
+        except tk.TclError:
+            result = ""
+        return result
 
     @classmethod
     def setClipboardText(cls, data):
@@ -69,4 +73,12 @@ class TurtleUtils:
         root.clipboard_clear()
         root.clipboard_append(data)
         root.update() # now it stays on the clipboard after the window is closed
+        root.destroy()
+
+    @classmethod
+    def clearClipboardText(cls):
+        root = tk.Tk()
+        root.withdraw()
+        root.clipboard_clear()
+        root.update()
         root.destroy()

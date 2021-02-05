@@ -17,13 +17,12 @@ class SketchDecoder:
             return
         self.tcomponent = TurtleComponent.createFromSketch(self.sketch)
         self.tparams = TurtleParams.instance()
-
+        
         self.decodeFromSketch(data)
 
         TurtleUtils.selectEntity(self.sketch)
 
     def decodeFromSketch(self, data):
-        
         if "Params" in data:
             params = data["Params"]
             for p in params:
@@ -85,7 +84,7 @@ class SketchDecoder:
         constraints:f.GeometricConstraints = self.sketch.geometricConstraints
         for con in cons:
             constraint = None
-            parse = re.findall(r"(VH|PA|PE|EQ|CL|CO|SY|MI|TA)([pc][0-9]*)([pc][0-9]*)?([pc][0-9]*)?", con)[0]
+            parse = re.findall(r"(VH|PA|PE|EQ|CC|CL|CO|MI|OC|OF|SY|SM|TA)([pcav][0-9|\[\]\.\-,]*)([pcav][0-9|\[\]\.\-,]*)?([pcav][0-9|\[\]\.\-,]*)?", con)[0]
             
             kind = parse[0]
             params = self.parseParams(parse[1:])
@@ -106,19 +105,45 @@ class SketchDecoder:
                     constraint = constraints.addPerpendicular(p0, p1)
                 elif(kind == "EQ"):
                     constraint = constraints.addEqual(p0, p1)
+                elif(kind == "CC"):
+                    constraint = constraints.addConcentric(p0, p1)
                 elif(kind == "CL"):
                     constraint = constraints.addCollinear(p0, p1)
                 elif(kind == "CO"):
                     constraint = constraints.addCoincident(p0, p1)
-                elif(kind == "SY"):
-                    constraint = constraints.addSymmetry(p0, p1, p2)
                 elif(kind == "MI"):
                     constraint = constraints.addMidPoint(p0, p1)
-                elif(kind == "TA"):
-                    constraint = constraints.addTangent(p0, p1)
+                elif(kind == "OC"): # get list of child curves that are about to be replaced by an offset constraint 
+                    self.offsetChildren = p0
+                elif(kind == "SY"):
+                    constraint = constraints.addSymmetry(p0, p1, p2)
                 elif(kind == "SM"):
                     constraint = constraints.addSmooth(p0, p1)
+                elif(kind == "TA"):
+                    constraint = constraints.addTangent(p0, p1)
+                    
+                elif(kind == "OF"): # create offset, and map new curves to 
+                    pass
+                    # try:
+                    #     dirPoint = core.Point3D.create(-45, 0, 0)
+                    #     oc = core.ObjectCollection.create()
+                    #     for c in p0:
+                    #         oc.add(c)
+                    #     offsetCurves = self.sketch.offset(oc, dirPoint, p1[0])
+                    #     # now remove matching elements from self.offsetChildren and clear that list
+                    #     for rc in self.offsetChildren:
+                    #         for curve in offsetCurves:
+                    #             if(TurtlePath.isEquivalentLine(curve, rc, 0.01)):
+                    #                 idx = self.curves.index(rc)
+                    #                 self.curves[idx] = curve
+                    #                 rc.deleteMe()
+                    #                 break
+                    #     self.offsetChildren.clear()
+                    # except:
+                    #     print('Failed:\n{}'.format(traceback.format_exc()))
+
             except:
+                #print('Failed:\n{}'.format(traceback.format_exc()))
                 print("Unable to generate constraint: " + con)
         return result
 
@@ -132,7 +157,6 @@ class SketchDecoder:
             dimension = None
             orientation = f.DimensionOrientations.AlignedDimensionOrientation
             parse = re.findall(r"(SLD|SOD|SAD|SDD|SRD|SMA|SMI|SCC)([pcv][^pcv]*)([pcv][^pcv]*)?([pcv][^pcv]*)?([pcv][^pcv]*)?", dim)[0]
-            print(parse)
             kind = parse[0]
             params = self.parseParams(parse[1:])
             p0 = params[0]
@@ -186,7 +210,12 @@ class SketchDecoder:
         result = None
         kind = param[0]
         val = param[1:]
-        if kind == "p":
+        if kind == "a":
+            result = []
+            idxs = val.split("|")
+            for idx in idxs:
+                result.append(self.curves[int(idx)])
+        elif kind == "p":
             result = self.points[int(val)]
         elif kind == "c":
             result = self.curves[int(val)]

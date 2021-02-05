@@ -31,6 +31,7 @@ class EncodeSketch(TurtleCommand):
             result = SketchData.getTestData()
         else:
             result = eval(result)# json.loads(result[23:])
+        #TurtleUtils.clearClipboardText()
         return result
 
 def run(context):

@@ -7,6 +7,7 @@ from .TurtleSketch import TurtleSketch
 from .TurtleParams import TurtleParams
 from .TurtlePath import TurtlePath
 from .TurtleLayers import TurtleLayers
+from collections.abc import Iterable
 
 f,core,app,ui,design,root = TurtleUtils.initGlobals()
 
@@ -32,6 +33,8 @@ class SketchEncoder:
     def encodeFromSketch(self):
         os.system('cls')
         self.data = {}
+
+
         tparams = TurtleParams.instance()
         self.usedParams = []
         self.params = tparams.getUserParams()
@@ -98,9 +101,7 @@ class SketchEncoder:
             edim = self.encodeDimension(dim)
             if edim != "":
                 self.dimensions[dim.entityToken] = edim
-        
-
-
+    
 
     def appendConnectedCurves(self, baseLine:f.SketchLine, tokens:list):
         connected = self.sketch.findConnectedCurves(baseLine)
@@ -163,24 +164,32 @@ class SketchEncoder:
         elif(tp is f.EqualConstraint):
             cCon:f.EqualConstraint = con
             result = "EQ" + self.encodeEntities(cCon.curveOne,cCon.curveTwo)
+        elif(tp is f.ConcentricConstraint):
+            cCon:f.ConcentricConstraint = con
+            result = "CC" + self.encodeEntities(cCon.entityOne,cCon.entityTwo)
         elif(tp is f.CollinearConstraint):
             cCon:f.CollinearConstraint = con
             result = "CL" + self.encodeEntities(cCon.lineOne,cCon.lineTwo)
         elif(tp is f.CoincidentConstraint):
             cCon:f.CoincidentConstraint = con
             result = "CO" + self.encodeEntities(cCon.point, cCon.entity)
-        elif(tp is f.SymmetryConstraint):
-            cCon:f.SymmetryConstraint = con
-            result = "SY" + self.encodeEntities(cCon.entityOne,cCon.entityTwo,cCon.symmetryLine)
         elif(tp is f.MidPointConstraint):
             cCon:f.MidPointConstraint = con
             result = "MI" + self.encodeEntities(cCon.point,cCon.midPointCurve)
-        elif(tp is f.TangentConstraint):
-            cCon:f.TangentConstraint = con
-            result = "TA" + self.encodeEntities(cCon.curveOne, cCon.curveTwo)
+        elif(tp is f.OffsetConstraint):
+            cCon:f.OffsetConstraint = con
+            result = "OC" + self.encodeEntities(cCon.childCurves) # need to replace these curves when the offset if regenerated
+            result += "','"
+            result += "OF" + self.encodeEntities(cCon.parentCurves, cCon.distance)
         elif(tp is f.SmoothConstraint):
             cCon:f.SmoothConstraint = con
             result = "SM" + self.encodeEntities(cCon.curveOne, cCon.curveTwo)
+        elif(tp is f.SymmetryConstraint):
+            cCon:f.SymmetryConstraint = con
+            result = "SY" + self.encodeEntities(cCon.entityOne,cCon.entityTwo,cCon.symmetryLine)
+        elif(tp is f.TangentConstraint):
+            cCon:f.TangentConstraint = con
+            result = "TA" + self.encodeEntities(cCon.curveOne, cCon.curveTwo)
         else:
             # not supported?
             # PolygonConstraint, RectangularPatternConstraint, CircularPatternConstraint
@@ -248,6 +257,12 @@ class SketchEncoder:
             result = "p" + str(self.pointValues.index(entity))
         elif entity in self.curveValues:
             result = "c" + str(self.curveValues.index(entity))
+        elif isinstance(entity, Iterable): #entity.iter: # len(entity) > 1: # is core.ObjectCollection:
+            result = "a"
+            sep = ""
+            for c in entity:
+                result += sep + str(self.curveValues.index(c))
+                sep = "|"
         else:
             result = self.encodeExpression(entity)
 

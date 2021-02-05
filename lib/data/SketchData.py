@@ -3,7 +3,6 @@ class SketchData:
     @classmethod
     def getTestData(self):
         return \
-#Turtle Generated Data
 {
 'Params':{
 },
