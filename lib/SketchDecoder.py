@@ -30,6 +30,8 @@ class SketchDecoder:
         else:
             params = {}
 
+        self.offsetRefs = {}
+
         pointValues = data["Points"] if "Points" in data else []
         chains = data["Chains"] if "Chains" in data else []
         constraints = data["Constraints"] if "Constraints" in data else []
@@ -82,6 +84,7 @@ class SketchDecoder:
     def generateConstraints(self, cons):
         result = []
         constraints:f.GeometricConstraints = self.sketch.geometricConstraints
+        index = 0
         for con in cons:
             constraint = None
             parse = re.findall(r"(VH|PA|PE|EQ|CC|CL|CO|MI|OC|OF|SY|SM|TA)([pcav][0-9|\[\]\.\-,]*)([pcav][0-9|\[\]\.\-,]*)?([pcav][0-9|\[\]\.\-,]*)?", con)[0]
@@ -120,17 +123,16 @@ class SketchDecoder:
                 elif(kind == "TA"):
                     constraint = constraints.addTangent(p0, p1)
                     
-                elif(kind == "OC"): # get list of child curves that are about to be replaced by an offset constraint 
-                    self.offsetChildren = p0
-                elif(kind == "OF"): # create offset, and map new curves to 
-                    #pass
+                elif(kind == "OF"):
+                    # offsets are weird, but this helps a lot: https://forums.autodesk.com/t5/fusion-360-api-and-scripts/create-a-parametric-curves-offset-from-python-api/m-p/9391531
                     try:
-                        # need to figure out this direction based on offset direction, use perpendicular line endpoint?
-                        dirPoint = core.Point3D.create(-45, 0, 0)
+                        self.offsetChildren = p2 # get list of child curves that are about to be replaced by an offset constraint 
+                        dirPoint = self.offsetChildren[0].startSketchPoint.geometry 
                         oc = core.ObjectCollection.create()
                         for c in p0:
                             oc.add(c)
-                        offsetCurves = self.sketch.offset(oc, dirPoint, p1[0])
+                        # the direction is set by the dirPoint geometry afaict, so distance is always positive relative to that
+                        offsetCurves = self.sketch.offset(oc, dirPoint, abs(p1[0])) 
                         # now remove matching elements from self.offsetChildren and clear that list
                         for rc in self.offsetChildren:
                             for curve in offsetCurves:
@@ -140,12 +142,13 @@ class SketchDecoder:
                                     rc.deleteMe()
                                     break
                         self.offsetChildren.clear()
+                        self.offsetRefs[index] = self.sketch.parentComponent.modelParameters[self.sketch.parentComponent.modelParameters.count - 1]
                     except:
                         print('Failed:\n{}'.format(traceback.format_exc()))
 
             except:
-                #print('Failed:\n{}'.format(traceback.format_exc()))
                 print("Unable to generate constraint: " + con)
+            index += 1
         return result
 
 
@@ -153,11 +156,10 @@ class SketchDecoder:
     def generateDimensions(self, dims):
         result = []
         dimensions:f.SketchDimensions = self.sketch.sketchDimensions
-        #'SLDp5p5v35mm','SLDp11p11v30mm','SODc9vtest','SDDc13v20mm'
         for dim in dims:
             dimension = None
             orientation = f.DimensionOrientations.AlignedDimensionOrientation
-            parse = re.findall(r"(SLD|SOD|SAD|SDD|SRD|SMA|SMI|SCC)([pcv][^pcv]*)([pcv][^pcv]*)?([pcv][^pcv]*)?([pcv][^pcv]*)?", dim)[0]
+            parse = re.findall(r"(SLD|SOD|SAD|SDD|SRD|SMA|SMI|SCC|SOC)([pcvo][^pcvo]*)([pcvo][^pcvo]*)?([pcvo][^pcvo]*)?([pcvo][^pcvo]*)?", dim)[0]
             kind = parse[0]
             params = self.parseParams(parse[1:])
             p0 = params[0]
@@ -184,6 +186,9 @@ class SketchDecoder:
             #     dimension = dimensions.(p0,p1,p2)
             # elif kind == "SCC":
             #     dimension = dimensions.(p0,p1,p2)
+            elif kind == "SOC":
+                parameter = self.offsetRefs[p0] 
+                parameter.expression = p1
 
     def textPoint(self, p0, p1 = None):
         if p1 == None:
@@ -225,6 +230,8 @@ class SketchDecoder:
                 result = ast.literal_eval(val) # self.parseNums(val)
             else:
                 result = val
+        elif kind == "o":
+            result = int(val)
         return result
     
     def asPoint3D(self, pts):
