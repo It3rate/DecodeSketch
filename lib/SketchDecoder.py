@@ -113,8 +113,6 @@ class SketchDecoder:
                     constraint = constraints.addCoincident(p0, p1)
                 elif(kind == "MI"):
                     constraint = constraints.addMidPoint(p0, p1)
-                elif(kind == "OC"): # get list of child curves that are about to be replaced by an offset constraint 
-                    self.offsetChildren = p0
                 elif(kind == "SY"):
                     constraint = constraints.addSymmetry(p0, p1, p2)
                 elif(kind == "SM"):
@@ -122,25 +120,28 @@ class SketchDecoder:
                 elif(kind == "TA"):
                     constraint = constraints.addTangent(p0, p1)
                     
+                elif(kind == "OC"): # get list of child curves that are about to be replaced by an offset constraint 
+                    self.offsetChildren = p0
                 elif(kind == "OF"): # create offset, and map new curves to 
-                    pass
-                    # try:
-                    #     dirPoint = core.Point3D.create(-45, 0, 0)
-                    #     oc = core.ObjectCollection.create()
-                    #     for c in p0:
-                    #         oc.add(c)
-                    #     offsetCurves = self.sketch.offset(oc, dirPoint, p1[0])
-                    #     # now remove matching elements from self.offsetChildren and clear that list
-                    #     for rc in self.offsetChildren:
-                    #         for curve in offsetCurves:
-                    #             if(TurtlePath.isEquivalentLine(curve, rc, 0.01)):
-                    #                 idx = self.curves.index(rc)
-                    #                 self.curves[idx] = curve
-                    #                 rc.deleteMe()
-                    #                 break
-                    #     self.offsetChildren.clear()
-                    # except:
-                    #     print('Failed:\n{}'.format(traceback.format_exc()))
+                    #pass
+                    try:
+                        # need to figure out this direction based on offset direction, use perpendicular line endpoint?
+                        dirPoint = core.Point3D.create(-45, 0, 0)
+                        oc = core.ObjectCollection.create()
+                        for c in p0:
+                            oc.add(c)
+                        offsetCurves = self.sketch.offset(oc, dirPoint, p1[0])
+                        # now remove matching elements from self.offsetChildren and clear that list
+                        for rc in self.offsetChildren:
+                            for curve in offsetCurves:
+                                if(TurtlePath.isEquivalentLine(curve, rc, 0.01)):
+                                    idx = self.curves.index(rc)
+                                    self.curves[idx] = curve
+                                    rc.deleteMe()
+                                    break
+                        self.offsetChildren.clear()
+                    except:
+                        print('Failed:\n{}'.format(traceback.format_exc()))
 
             except:
                 #print('Failed:\n{}'.format(traceback.format_exc()))

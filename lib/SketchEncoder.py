@@ -50,6 +50,8 @@ class SketchEncoder:
         self.parseAllConstraints()
         self.parseAllDimensions()
 
+        # need to remove all unused points?
+
         self.data["Params"] = self.params
         self.data["Points"] = self.pointValues
         self.data["Chains"] = self.chains
