@@ -1,13 +1,13 @@
 
 import adsk.core, adsk.fusion, adsk.cam, traceback
 import os, math, re
+from collections.abc import Iterable
 from .TurtleUtils import TurtleUtils
 from .TurtleComponent import TurtleComponent
 from .TurtleSketch import TurtleSketch
 from .TurtleParams import TurtleParams
 from .TurtlePath import TurtlePath
 from .TurtleLayers import TurtleLayers
-from collections.abc import Iterable
 
 f,core,app,ui,design,root = TurtleUtils.initGlobals()
 
@@ -203,7 +203,7 @@ class SketchEncoder:
         result = ""
         tp = type(dim)
         if(tp == f.SketchLinearDimension):
-            tdim:f.SketchLinearDimension = dim
+            tdim:f.SketchLinearDimension = dim # DistanceDimension
             result = "SLD" + self.encodeEntities(tdim.entityOne,tdim.entityTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
 
         elif(tp == f.SketchOffsetDimension):
@@ -240,15 +240,6 @@ class SketchEncoder:
 
         else:
             print("*** Dimension not parsed: " + str(tp))
-
-            # def addDistanceDimension(self, pointOne, pointTwo, orientation, textPoint, isDriving):
-            # def addOffsetDimension(self, line, entityTwo, textPoint, isDriving): # also SketchOffsetCurvesDimension
-            # def addAngularDimension(self, lineOne, lineTwo, textPoint, isDriving):
-            # def addDiameterDimension(self, entity, textPoint, isDriving):
-            # def addRadialDimension(self, entity, textPoint, isDriving):
-            # def addEllipseMajorRadiusDimension(self, ellipse, textPoint, isDriving):
-            # def addEllipseMinorRadiusDimension(self, ellipse, textPoint, isDriving):
-            # def addConcentricCircleDimension(self, circleOne, circleTwo, textPoint, isDriving):
 
         return result
 

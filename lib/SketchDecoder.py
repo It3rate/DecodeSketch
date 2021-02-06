@@ -1,6 +1,7 @@
 
 import adsk.core, adsk.fusion, adsk.cam, traceback
 import os, math, re, ast
+from collections.abc import Iterable
 from .TurtleUtils import TurtleUtils
 from .TurtleComponent import TurtleComponent
 from .TurtleSketch import TurtleSketch
@@ -63,7 +64,6 @@ class SketchDecoder:
                 if kind == "L":
                     curve = sketchCurves.sketchLines.addByTwoPoints(params[0], params[1])
                 elif kind == "A":
-                    #curve = sketchCurves.sketchArcs.addByCenterStartSweep(params[0], params[1].geometry, params[3][0])
                     curve = sketchCurves.sketchArcs.addByThreePoints(params[0], self.asPoint3D(params[1]), params[2])
                     pass
                 elif kind == "C":
@@ -141,7 +141,7 @@ class SketchDecoder:
                         # the direction is set by the dirPoint geometry afaict, so distance is always positive relative to that
                         # this will generate new curves
                         offsetCurves = self.sketch.offset(oc, dirPoint, dist) 
-                        
+
                         # now remove matching elements that were generated
                         for rc in p2:
                             for curve in offsetCurves:
@@ -186,16 +186,20 @@ class SketchDecoder:
                 dimension = dimensions.addAngularDimension(p0,p1, midText)
                 dimension.parameter.expression = p2
             elif kind == "SDD":
-                dimension = dimensions.addDiameterDimension(p0, self.asPoint3D(p3)) # self.textPoint(p0.geometry.center))
+                dimension = dimensions.addDiameterDimension(p0, self.asPoint3D(p2)) # self.textPoint(p0.geometry.center))
                 dimension.parameter.expression = p1
-            # elif kind == "SRD": # SketchRadialDimension
-            #     dimension = dimensions.(p0,p1,p2)
-            # elif kind == "SMA": # SketchEllipseMajorRadiusDimension
-            #     dimension = dimensions.(p0,p1,p2)
-            # elif kind == "SMI": # SketchEllipseMinorRadiusDimension
-            #     dimension = dimensions.(p0,p1,p2)
-            # elif kind == "SCC": # SketchConcentricCircleDimension
-            #     dimension = dimensions.(p0,p1,p2)
+            elif kind == "SRD": # SketchRadialDimension
+                dimension = dimensions.addRadialDimension(p0, self.asPoint3D(p2))
+                dimension.parameter.expression = p1
+            elif kind == "SMA": # SketchEllipseMajorRadiusDimension
+                dimension = dimensions.addEllipseMajorRadiusDimension(p0, self.asPoint3D(p2))
+                dimension.parameter.expression = p1
+            elif kind == "SMI": # SketchEllipseMinorRadiusDimension
+                dimension = dimensions.addEllipseMinorRadiusDimension(p0, self.asPoint3D(p2))
+                dimension.parameter.expression = p1
+            elif kind == "SCC": # SketchConcentricCircleDimension
+                dimension = dimensions.addConcentricCircleDimension(p0,p1,self.asPoint3D(p3))
+                dimension.parameter.expression = p2
             elif kind == "SOC": # SketchOffsetCurvesDimension
                 parameter = self.offsetRefs[p0] 
                 parameter.expression = p1
@@ -245,4 +249,9 @@ class SketchDecoder:
         return result
     
     def asPoint3D(self, pts):
-        return core.Point3D.create(pts[0],pts[1],pts[2] if len(pts)>2 else 0)
+        result = 0
+        if isinstance(pts, Iterable):
+            result = core.Point3D.create(pts[0],pts[1] if len(pts) > 1 else 0,pts[2] if len(pts) > 1 else 0)
+        elif type(pts) == f.SketchPoint:
+            result = pts.geometry
+        return result
