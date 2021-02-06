@@ -138,6 +138,7 @@ class SketchEncoder:
     def encodeCurve(self, curve:f.SketchCurve):
         result = ""
         tp = type(curve)
+        print(tp)
         ctrn = "x" if curve.isConstruction else ""
         if tp is f.SketchLine:
             result = "L" + ctrn + self.encodeEntities(curve.startSketchPoint, curve.endSketchPoint)
@@ -152,7 +153,7 @@ class SketchEncoder:
         elif tp is f.SketchConicCurve:
             result = "O" + ctrn + self.encodeEntities(curve.startSketchPoint, curve.apexSketchPoint, curve.endSketchPoint) + self.encodeExpressions(curve.length)
         elif tp is f.SketchFittedSpline:
-            result = "F" + ctrn + self.encodeEntities(curve.fitPoints)
+            result = "F" + ctrn + self.encodeEntities(curve.fitPoints) #note: control point splines are not supported, only fixed point splines work.
         else: 
             print("*** Curve not parsed: " + str(tp))
         return result
