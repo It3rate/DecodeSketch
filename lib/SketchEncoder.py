@@ -151,6 +151,10 @@ class SketchEncoder:
             result = "E" + ctrn + self.encodeEntities(curve.centerSketchPoint, curve.majorAxisLine.startSketchPoint, curve.minorAxisLine.startSketchPoint)
         elif tp is f.SketchConicCurve:
             result = "O" + ctrn + self.encodeEntities(curve.startSketchPoint, curve.apexSketchPoint, curve.endSketchPoint) + self.encodeExpressions(curve.length)
+        elif tp is f.SketchFittedSpline:
+            result = "F" + ctrn + self.encodeEntities(curve.fitPoints)
+        else: 
+            print("*** Curve not parsed: " + str(tp))
         return result
     #  SketchConicCurve SketchEllipticalArc SketchFittedSpline SketchFixedSpline 
 
@@ -255,7 +259,13 @@ class SketchEncoder:
             result = "p" + str(self.pointValues.index(entity))
         elif entity in self.curveValues:
             result = "c" + str(self.curveValues.index(entity))
-        elif isinstance(entity, Iterable): #entity.iter: # len(entity) > 1: # is core.ObjectCollection:
+        elif type(entity) == f.SketchPointList: # splines
+            result = "s"
+            sep = ""
+            for c in entity:
+                result += sep + str(self.pointValues.index(c))
+                sep = "|"
+        elif isinstance(entity, Iterable): # curves
             result = "a"
             sep = ""
             for c in entity:

@@ -56,7 +56,7 @@ class SketchDecoder:
             segs = chain.split(" ")
             for seg in segs:
                 # can't capture repeating groups with re, so max 4 params. Use pip regex to improve
-                parse = re.findall(r"([LACEO])(x?)([pv][0-9\[\]\.\-,]*)([pv][0-9\[\]\.\-,]*)?([pv][0-9\[\]\.\-,]*)?([pv][0-9\[\]\.\-,]*)?", seg)[0]
+                parse = re.findall(r"([LACEOF])(x?)([pvas][0-9\[\]\.\-,|]*)([pvas][0-9\[\]\.\-,|]*)?([pvas][0-9\[\]\.\-,|]*)?([pvas][0-9\[\]\.\-,|]*)?", seg)[0]
                 kind = parse[0]
                 isConstruction = parse[1] == "x"
                 params = self.parseParams(parse[2:])
@@ -65,17 +65,25 @@ class SketchDecoder:
                     curve = sketchCurves.sketchLines.addByTwoPoints(params[0], params[1])
                 elif kind == "A":
                     curve = sketchCurves.sketchArcs.addByThreePoints(params[0], self.asPoint3D(params[1]), params[2])
-                    pass
                 elif kind == "C":
                     curve = sketchCurves.sketchCircles.addByCenterRadius(params[0], params[1][0])
-                    pass
                 elif kind == "E":
                     curve = sketchCurves.sketchEllipses.add(params[0], self.asPoint3D(params[1]), self.asPoint3D(params[2]))
-                    pass
                 elif kind == "O":
                     # seems there is no add for conic curves yet?
                     #curve = sketchCurves.sketchConicCurves.add()
                     pass
+                elif kind == "F":
+                    pts = self.asObjectCollection(params[0])
+                    spline = sketchCurves.sketchFittedSplines.add(pts)
+                    fitPoints = spline.fitPoints
+                    count = 0
+                    for pt in params[0]:
+                        idx = self.points.index(pt)
+                        self.points[idx] = fitPoints.item(count)
+                        pt.deleteMe()
+                        count += 1
+
                 if curve: 
                     curve.isConstruction = isConstruction
                     result.append(curve)
@@ -135,9 +143,7 @@ class SketchDecoder:
                             dist = abs(p1[0])
 
                         #dirPoint = c0.geometry.center if type(c0) == f.SketchCircle else c0.startSketchPoint.geometry 
-                        oc = core.ObjectCollection.create()
-                        for c in p0:
-                            oc.add(c)
+                        oc = self.asObjectCollection(p0)
                         # the direction is set by the dirPoint geometry afaict, so distance is always positive relative to that
                         # this will generate new curves
                         offsetCurves = self.sketch.offset(oc, dirPoint, dist) 
@@ -230,22 +236,28 @@ class SketchDecoder:
         result = None
         kind = param[0]
         val = param[1:]
-        if kind == "a":
-            result = []
-            idxs = val.split("|")
-            for idx in idxs:
-                result.append(self.curves[int(idx)])
-        elif kind == "p":
+
+        if kind == "p": # point
             result = self.points[int(val)]
-        elif kind == "c":
+        elif kind == "c": # curve
             result = self.curves[int(val)]
-        elif kind == "v":
+        elif kind == "v": # array of values
             if val.startswith("["):
                 result = ast.literal_eval(val) # self.parseNums(val)
             else:
                 result = val
-        elif kind == "o":
+        elif kind == "o": # object index (so far just used for tracking offset constraints)
             result = int(val)
+        elif kind == "a": # list of curve indexes
+            result = []
+            idxs = val.split("|")
+            for idx in idxs:
+                result.append(self.curves[int(idx)])
+        elif kind == "s": # list of point indexes (for splines)
+            result = []
+            idxs = val.split("|")
+            for idx in idxs:
+                result.append(self.points[int(idx)])
         return result
     
     def asPoint3D(self, pts):
@@ -254,4 +266,10 @@ class SketchDecoder:
             result = core.Point3D.create(pts[0],pts[1] if len(pts) > 1 else 0,pts[2] if len(pts) > 1 else 0)
         elif type(pts) == f.SketchPoint:
             result = pts.geometry
+        return result
+    
+    def asObjectCollection(self, items):
+        result = core.ObjectCollection.create()
+        for item in items:
+            result.add(item)
         return result
