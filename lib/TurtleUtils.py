@@ -62,7 +62,10 @@ class TurtleUtils:
         root.withdraw()
         try:
             result = root.clipboard_get()
+            cls.clearClipboardText()
+            cls.setClipboardText(result)
         except tk.TclError:
+            print(traceback.format_exc())
             result = ""
         return result
 

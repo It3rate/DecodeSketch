@@ -18,13 +18,18 @@ class SketchDecoder:
         if not self.sketch:
             return
         self.tcomponent = TurtleComponent.createFromSketch(self.sketch)
+        self.tsketch = self.tcomponent.activeSketch
         self.tparams = TurtleParams.instance()
 
-        self.decodeFromSketch(data)
+        cline = self.tsketch.getSingleConstructionLine()
+        #if cline:
+
+        self.decodeSketchData(data)
+        self.decodeFromSketch()
 
         TurtleUtils.selectEntity(self.sketch)
 
-    def decodeFromSketch(self, data):
+    def decodeSketchData(self, data):
         if "Params" in data:
             params = data["Params"]
             for p in params:
@@ -32,17 +37,18 @@ class SketchDecoder:
         else:
             params = {}
 
+        self.pointValues = data["Points"] if "Points" in data else []
+        self.chainValues = data["Chains"] if "Chains" in data else []
+        self.constraintValues = data["Constraints"] if "Constraints" in data else []
+        self.dimensionValues = data["Dimensions"] if "Dimensions" in data else []
+
+
+    def decodeFromSketch(self):
         self.offsetRefs = {}
-
-        pointValues = data["Points"] if "Points" in data else []
-        chains = data["Chains"] if "Chains" in data else []
-        constraints = data["Constraints"] if "Constraints" in data else []
-        dimensions = data["Dimensions"] if "Dimensions" in data else []
-
-        self.points = self.generatePoints(pointValues)
-        self.curves = self.generateCurves(chains)
-        self.constraints = self.generateConstraints(constraints)
-        self.dimensions = self.generateDimensions(dimensions)
+        self.points = self.generatePoints(self.pointValues)
+        self.curves = self.generateCurves(self.chainValues)
+        self.constraints = self.generateConstraints(self.constraintValues)
+        self.dimensions = self.generateDimensions(self.dimensionValues)
 
     def generatePoints(self, ptVals):
         (origin, xAxis, yAxis, zAxis) = self.transform.getAsCoordinateSystem()
@@ -69,6 +75,8 @@ class SketchDecoder:
                     curve = sketchCurves.sketchLines.addByTwoPoints(params[0], params[1])
                 elif kind == "A":
                     curve = sketchCurves.sketchArcs.addByThreePoints(params[0], self.asPoint3D(params[1]), params[2])
+                    if len(params) > 2:
+                        self.replacePoint(params[3], curve.centerSketchPoint)
                 elif kind == "C":
                     curve = sketchCurves.sketchCircles.addByCenterRadius(params[0], params[1][0])
                 elif kind == "E":
@@ -83,14 +91,25 @@ class SketchDecoder:
                     fitPoints = spline.fitPoints
                     count = 0
                     for pt in params[0]:
-                        idx = self.points.index(pt)
-                        self.points[idx] = fitPoints.item(count)
-                        pt.deleteMe()
+                        self.replacePoint(pt, fitPoints.item(count))
+                        # idx = self.points.index(pt)
+                        # self.points[idx] = fitPoints.item(count)
+                        # pt.deleteMe()
                         count += 1
 
                 if curve:
                     curve.isConstruction = isConstruction
                     result.append(curve)
+        return result
+    
+    def replacePoint(self, orgPoint, newPoint):
+        result = True
+        try:
+            idx = self.points.index(orgPoint)
+            self.points[idx] = newPoint
+            orgPoint.deleteMe()
+        except:
+            result = False
         return result
 
     def generateConstraints(self, cons):
@@ -137,7 +156,7 @@ class SketchDecoder:
                     constraint = constraints.addTangent(p0, p1)
 
                 elif(kind == "OF"):
-                    # offsets are weird, but this helps a lot: https://forums.autodesk.com/t5/fusion-360-api-and-scripts/create-a-parametric-curves-offset-from-python-api/m-p/9391531
+                    # offsets are weird, but this helps: https://forums.autodesk.com/t5/fusion-360-api-and-scripts/create-a-parametric-curves-offset-from-python-api/m-p/9391531
                     try:
                         c0 = p2[0]
                         if type(c0) == f.SketchCircle:

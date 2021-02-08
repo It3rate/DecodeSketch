@@ -1,6 +1,6 @@
 
 import adsk.core, adsk.fusion, adsk.cam, traceback
-import os, math, re
+import os, math, re, sys
 from collections.abc import Iterable
 from .TurtleUtils import TurtleUtils
 from .TurtleComponent import TurtleComponent
@@ -26,16 +26,19 @@ class SketchEncoder:
         self.chains = []
         self.constraints = {}
         self.dimensions = {}
-
+        
+        # python seems to not compare sys.float_info.min well
+        self.guideline = None
+        self.bounds = [core.Point2D.create(float("inf"), float("inf")), core.Point2D.create(float("-inf"), float("-inf"))]
         self.offsetParams = []
 
-        self.encodeFromSketch()
+        self.parseSketchData()
+        self.encodeAll()
         TurtleUtils.selectEntity(self.sketch)
 
-    def encodeFromSketch(self):
+    def parseSketchData(self):
         os.system('cls')
         self.data = {}
-
 
         tparams = TurtleParams.instance()
         self.usedParams = []
@@ -52,8 +55,9 @@ class SketchEncoder:
         self.parseAllConstraints()
         self.parseAllDimensions()
 
-        # need to remove all unused points?
 
+    def encodeAll(self):
+        # need to remove all unused points?
         self.data["Params"] = self.params
         self.data["Points"] = self.pointValues
         self.data["Chains"] = self.chains
@@ -62,12 +66,17 @@ class SketchEncoder:
 
         result = ("#Turtle Generated Data\n{\n")
         result += ("\'Params\':{\n" + self.encodeParams() + "},\n")
+        result += ("\'PointBounds\':[" + self.encodePoints(self.bounds[0], self.bounds[1]) + "],\n")
         result += ("\'Points\':[\n" + self.encodePoints(*self.data["Points"]) + "\n],\n")
         result += ("\'Chains\':[\n" + self.encodeChains(self.data["Chains"]) + "\n],\n")
         if len(self.data["Constraints"]) > 0:
             result += ("\'Constraints\':[\n\'" + "\',\'".join(self.data["Constraints"]) + "\'\n],\n")
         if len(self.data["Dimensions"]) > 0:
-            result += ("\'Dimensions\':[\n\'" + "\',\'".join(self.data["Dimensions"]) + "\'\n]\n")
+            result += ("\'Dimensions\':[\n\'" + "\',\'".join(self.data["Dimensions"]) + "\'\n],\n")
+        if self.guideline:
+            result += ("\'Guideline\':[" + self.encodePoints(self.guideline) + "," + self.encodeEntity(self.guideline) + "]\n")
+        else: 
+            result += "\'Guideline\':[]\n" 
         result += ("}\n\n")
 
 
@@ -84,7 +93,17 @@ class SketchEncoder:
 
     def parseAllPoints(self):
         for point in self.sketch.sketchPoints:
-            self.points[point.entityToken] = point
+            if point.connectedEntities and point.connectedEntities.count > 0:
+                self.points[point.entityToken] = point
+                if(point.geometry.x < self.bounds[0].x):
+                    self.bounds[0].x = point.geometry.x
+                if(point.geometry.y < self.bounds[0].y):
+                    self.bounds[0].y = point.geometry.y
+                if(point.geometry.x > self.bounds[1].x):
+                    self.bounds[1].x = point.geometry.x
+                if(point.geometry.y > self.bounds[1].y):
+                    self.bounds[1].y = point.geometry.y
+
 
     def parseAllChains(self):
         tokens = []
@@ -106,6 +125,7 @@ class SketchEncoder:
             if edim != "":
                 self.dimensions[dim.entityToken] = edim
     
+
 
     def appendConnectedCurves(self, baseLine:f.SketchLine, tokens:list):
         connected = self.sketch.findConnectedCurves(baseLine)
@@ -138,22 +158,24 @@ class SketchEncoder:
     def encodeCurve(self, curve:f.SketchCurve):
         result = ""
         tp = type(curve)
-        print(tp)
-        ctrn = "x" if curve.isConstruction else ""
+        isConstruction = "x" if curve.isConstruction else ""
+
         if tp is f.SketchLine:
-            result = "L" + ctrn + self.encodeEntities(curve.startSketchPoint, curve.endSketchPoint)
+            result = "L" + isConstruction + self.encodeEntities(curve.startSketchPoint, curve.endSketchPoint)
+            if curve.isConstruction and not self.guideline:
+                self.guideline = curve
         elif tp is f.SketchArc:
             pointOnLine = TurtleSketch.getMidpoint(curve)
             #return "A" + ctrn + self.encodeEntities(curve.centerSketchPoint, curve.startSketchPoint, curve.endSketchPoint) + self.encodeExpression(curve.geometry.endAngle)
-            return "A" + ctrn + self.encodeEntities(curve.startSketchPoint) + self.encodeExpression(pointOnLine) + self.encodeEntities(curve.endSketchPoint) 
+            return "A" + isConstruction + self.encodeEntities(curve.startSketchPoint) + self.encodeExpression(pointOnLine) + self.encodeEntities(curve.endSketchPoint, curve.centerSketchPoint) 
         elif tp is f.SketchCircle:
-            result = "C" + ctrn + self.encodeEntities(curve.centerSketchPoint) + self.encodeExpression(curve.radius)
+            result = "C" + isConstruction + self.encodeEntities(curve.centerSketchPoint) + self.encodeExpression(curve.radius)
         elif tp is f.SketchEllipse:
-            result = "E" + ctrn + self.encodeEntities(curve.centerSketchPoint, curve.majorAxisLine.startSketchPoint, curve.minorAxisLine.startSketchPoint)
+            result = "E" + isConstruction + self.encodeEntities(curve.centerSketchPoint, curve.majorAxisLine.startSketchPoint, curve.minorAxisLine.startSketchPoint)
         elif tp is f.SketchConicCurve:
-            result = "O" + ctrn + self.encodeEntities(curve.startSketchPoint, curve.apexSketchPoint, curve.endSketchPoint) + self.encodeExpressions(curve.length)
+            result = "O" + isConstruction + self.encodeEntities(curve.startSketchPoint, curve.apexSketchPoint, curve.endSketchPoint) + self.encodeExpressions(curve.length)
         elif tp is f.SketchFittedSpline:
-            result = "F" + ctrn + self.encodeEntities(curve.fitPoints) #note: control point splines are not supported, only fixed point splines work.
+            result = "F" + isConstruction + self.encodeEntities(curve.fitPoints) #note: control point splines are not supported, only fixed point splines work.
         else: 
             print("*** Curve not parsed: " + str(tp))
         return result
@@ -250,12 +272,19 @@ class SketchEncoder:
 
     def encodeEntities(self, *points):
         result = ""
-        for pt in points:
-            result += self.encodeEntity(pt)
+        if not points:
+            return result
+
+        if points:
+            for pt in points:
+                result += self.encodeEntity(pt)
         return result
 
     def encodeEntity(self, entity):
         result = ""
+        if not entity:
+            return result
+
         if entity in self.pointValues:
             result = "p" + str(self.pointValues.index(entity))
         elif entity in self.curveValues:
@@ -281,11 +310,18 @@ class SketchEncoder:
 
     def encodeExpressions(self, *expressions):
         result = ""
+        if not expressions:
+            return result
+
         for expr in expressions:
             result += self.encodeExpression(expr)
         return result
 
     def encodeExpression(self, expr):
+        result = ""
+        if not expr:
+            return result
+
         tp = type(expr)
         result = "v"
         if tp is float or tp is int:
@@ -301,25 +337,42 @@ class SketchEncoder:
 
     def encodePoints(self, *points):
         result = ""
+        if not points:
+            return result
         comma = ""
         for pt in points:
-            result += comma + self.encodePoint(pt)
+            if type(pt) is f.SketchLine:
+                result += comma + self.encodePoint(pt.startSketchPoint) + "," + self.encodePoint(pt.endSketchPoint) 
+            else:
+                result += comma + self.encodePoint(pt)
             comma=","
         return result
 
     def encodePoint(self, pt:f.SketchPoint):  
-        tp = type(pt)
         result = ""
+        if not pt:
+            return result
+        tp = type(pt)
+        x = 0.0
+        y = 0.0
         if tp is f.SketchPoint:
-            result += "["+TurtleUtils.round(pt.geometry.x)+","+TurtleUtils.round(pt.geometry.y)+"]"
+            x = pt.geometry.x
+            y = pt.geometry.y
         elif tp is core.Point2D or tp is core.Vector2D:
-            result += "["+TurtleUtils.round(pt.x)+","+TurtleUtils.round(pt.y)+"]"
+            x = pt.x
+            y = pt.y
         elif tp is core.Point3D or tp is core.Vector3D:
-            result += "["+TurtleUtils.round(pt.x)+","+TurtleUtils.round(pt.y)+","+TurtleUtils.round(pt.z)+"]"
+            x = pt.x
+            y = pt.y # ignore z unless extending to 3D sketches
+        
+        result += "["+TurtleUtils.round(x)+","+TurtleUtils.round(y)+"]"
         return result
         
     def encodeChains(self, chains):
         result = []
+        if not chains:
+            return result
+
         index = 0
         for chain in chains:
             startIndex = index

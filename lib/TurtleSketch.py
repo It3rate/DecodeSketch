@@ -206,6 +206,14 @@ class TurtleSketch:
 
         return result
     
+    def getSingleConstructionLine(self):
+        result = None
+        for line in self.sketch.sketchCurves.sketchLines:
+            if line.isConstruction:
+                result = line
+                break
+        return result
+
     
     def createOffsetPlane(self, offset, destinationComponent:f.Component = None, name:str = None):
         comp = destinationComponent if destinationComponent else self.component
