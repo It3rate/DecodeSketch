@@ -74,18 +74,13 @@ class SketchEncoder:
         if len(self.data["Dimensions"]) > 0:
             result += ("\'Dimensions\':[\n\'" + "\',\'".join(self.data["Dimensions"]) + "\'\n],\n")
         if self.guideline:
-            result += ("\'Guideline\':[" + self.encodePoints(self.guideline) + "," + self.encodeEntity(self.guideline) + "]\n")
+            result += ("\'Guideline\':[" + self.encodePoints(self.guideline) + ",\'" + self.encodeEntity(self.guideline) + "\']\n")
         else: 
             result += "\'Guideline\':[]\n" 
         result += ("}\n\n")
 
 
         TurtleUtils.setClipboardText(result)
-        # f = open("sketchData.txt", "w")
-        # f.write(result)
-        # f.close()
-        # command = 'type sketchData.txt | clip'
-        # os.system(command)
         
         print(result)
         print("\n\nSketch data is now on clipboard.")
@@ -339,13 +334,18 @@ class SketchEncoder:
         result = ""
         if not points:
             return result
+        lineStep = 5
         comma = ""
+        idx = 0
         for pt in points:
             if type(pt) is f.SketchLine:
                 result += comma + self.encodePoint(pt.startSketchPoint) + "," + self.encodePoint(pt.endSketchPoint) 
             else:
                 result += comma + self.encodePoint(pt)
-            comma=","
+            comma=",\t"
+            idx += 1
+            if idx % lineStep == 0:
+                comma = ", # " + str(idx - lineStep) + " - " + str(idx - 1) + "\n"
         return result
 
     def encodePoint(self, pt:f.SketchPoint):  
