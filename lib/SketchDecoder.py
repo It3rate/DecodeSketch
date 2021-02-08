@@ -21,14 +21,39 @@ class SketchDecoder:
         self.tsketch = self.tcomponent.activeSketch
         self.tparams = TurtleParams.instance()
 
-        cline = self.tsketch.getSingleConstructionLine()
-        #if cline:
-
+        self.assessGuidelineTransform(data)
         self.decodeSketchData(data)
         self.decodeFromSketch()
 
         TurtleUtils.selectEntity(self.sketch)
 
+    def assessGuidelineTransform(self, data):
+        gl = data["Guideline"] if "Dimensions" in data else []
+        self.guideline = [self.asPoint3D(gl[0]),self.asPoint3D(gl[1])] if len(gl) > 1 else []
+        self.guideindex = gl[2] if len(self.guideline) > 2 else -1
+        cline:f.SketchLine = self.tsketch.getSingleConstructionLine()
+        if cline and len(self.guideline) > 1:
+            self.transform = core.Matrix3D.create()
+            gl0 = self.guideline[0]
+            gl1 = self.guideline[1]
+            cl0 = cline.startSketchPoint.geometry
+            cl1 = cline.endSketchPoint.geometry
+            
+            vc = core.Vector3D.create
+            orgVec = vc((gl1.x-gl0.x), (gl1.y - gl0.y), 0)
+            destVec = vc((cl1.x-cl0.x), (cl1.y - cl0.y), 0)
+            self.transform.setToAlignCoordinateSystems(
+                gl0, 
+                orgVec,
+                vc(orgVec.y,-orgVec.x,0),
+                vc(0,0,1),
+                cl0, 
+                destVec,
+                vc(destVec.y,-destVec.x,0),
+                vc(0,0,1)
+            )
+        
+        
     def decodeSketchData(self, data):
         if "Params" in data:
             params = data["Params"]
@@ -41,7 +66,6 @@ class SketchDecoder:
         self.chainValues = data["Chains"] if "Chains" in data else []
         self.constraintValues = data["Constraints"] if "Constraints" in data else []
         self.dimensionValues = data["Dimensions"] if "Dimensions" in data else []
-
 
     def decodeFromSketch(self):
         self.offsetRefs = {}

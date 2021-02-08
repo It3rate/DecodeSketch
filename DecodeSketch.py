@@ -25,7 +25,7 @@ class DecodeSketch(TurtleCommand):
         
         #data = self.getSketchData()
         #transform = core.Matrix3D.create()
-        #transform.setToRotation(math.pi/3.0, adsk.core.Vector3D.create(0, 0, 1), adsk.core.Point3D.create(0, 0, 0))
+        #transform.setToRotation(math.pi/3.0, core.Vector3D.create(0, 0, 1), core.Point3D.create(0, 0, 0))
         #transform.setCell(0,0, 2.0)
         #transform.setCell(1,1, 0.5)
         #SketchDecoder(data, transform)
