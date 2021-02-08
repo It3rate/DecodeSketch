@@ -1,5 +1,5 @@
 
-import adsk.core, adsk.fusion, adsk.cam, traceback
+import adsk.core, adsk.fusion, adsk.cam, traceback, math
 from .lib.TurtleUtils import TurtleUtils
 from .lib.TurtleCommand import TurtleCommand
 from .lib.SketchEncoder import SketchEncoder
@@ -12,7 +12,7 @@ from .lib.data.SketchData import SketchData
 # command
 f,core,app,ui,design,root = TurtleUtils.initGlobals()
 
-class EncodeSketch(TurtleCommand):
+class DecodeSketch(TurtleCommand):
     def __init__(self):
         cmdId = 'DecodeSketchId'
         cmdName = 'Dencode Sketch Command'
@@ -23,7 +23,12 @@ class EncodeSketch(TurtleCommand):
         data = self.getSketchData()
         #JointMaker()
         #SketchEncoder()
-        SketchDecoder(data)
+        
+        # transform = core.Matrix3D.create()
+        # transform.setToRotation(math.pi/3.0, adsk.core.Vector3D.create(0, 0, 1), adsk.core.Point3D.create(0, 0, 0))
+        # transform.setCell(0,0, 2.0)
+        # transform.setCell(1,1, 2.0)
+        SketchDecoder(data, transform)
 
     def getSketchData(self):
         result = TurtleUtils.getClipboardText()
@@ -35,4 +40,4 @@ class EncodeSketch(TurtleCommand):
         return result
 
 def run(context):
-    cmd = EncodeSketch()
+    cmd = DecodeSketch()
