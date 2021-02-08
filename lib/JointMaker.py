@@ -89,7 +89,7 @@ class JointMaker:
             "ME", [0,0,13,1, 9,0,14,1],
             "PA", [baseLine, 0],
             "EQ", [baseLine, 4],
-            "CO", [0,8, 2,6],
+            "CL", [0,8, 2,6],
             "PA", [0,4, 1,7, 3,5, 9,13, 11,13, 12,10],
             "SY", [9,13,construction, 1,7,construction, 3,5,construction],
             "PE", [2,3, 9,10],
@@ -119,7 +119,7 @@ class JointMaker:
             tsketch.constrain( [
                 "PA", [0,2, 1,3],
                 "PE", [0, 1],
-                "CO", [0, baseLine],
+                "CL", [0, baseLine],
                 "LL", [1, pFULL],
                 "SY", [1, 3, construction],
                 "PD", [baseLine, 0, 0, 0, pLIP]

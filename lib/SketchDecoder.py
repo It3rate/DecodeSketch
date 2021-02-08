@@ -18,7 +18,7 @@ class SketchDecoder:
             return
         self.tcomponent = TurtleComponent.createFromSketch(self.sketch)
         self.tparams = TurtleParams.instance()
-        
+
         self.decodeFromSketch(data)
 
         TurtleUtils.selectEntity(self.sketch)
@@ -46,7 +46,7 @@ class SketchDecoder:
     def generatePoints(self, ptVals):
         result = []
         for pv in ptVals:
-            result.append(self.sketch.sketchPoints.add(core.Point3D.create(pv[0], pv[1], 0)))
+            result.append(self.sketch.sketchPoints.add(self.asPoint3D(pv)))# core.Point3D.create(pv[0]*2+20, pv[1]*2+50, 0)))
         return result
 
     def generateCurves(self, chains):
@@ -84,11 +84,11 @@ class SketchDecoder:
                         pt.deleteMe()
                         count += 1
 
-                if curve: 
+                if curve:
                     curve.isConstruction = isConstruction
                     result.append(curve)
         return result
-            
+
     def generateConstraints(self, cons):
         result = []
         constraints:f.GeometricConstraints = self.sketch.geometricConstraints
@@ -96,7 +96,7 @@ class SketchDecoder:
         for con in cons:
             constraint = None
             parse = re.findall(r"(VH|PA|PE|EQ|CC|CL|CO|MI|OC|OF|SY|SM|TA)([pcav][0-9|\[\]\.\-,]*)([pcav][0-9|\[\]\.\-,]*)?([pcav][0-9|\[\]\.\-,]*)?", con)[0]
-            
+
             kind = parse[0]
             params = self.parseParams(parse[1:])
             p0 = params[0]
@@ -130,7 +130,7 @@ class SketchDecoder:
                     constraint = constraints.addSmooth(p0, p1)
                 elif(kind == "TA"):
                     constraint = constraints.addTangent(p0, p1)
-                    
+
                 elif(kind == "OF"):
                     # offsets are weird, but this helps a lot: https://forums.autodesk.com/t5/fusion-360-api-and-scripts/create-a-parametric-curves-offset-from-python-api/m-p/9391531
                     try:
@@ -142,11 +142,11 @@ class SketchDecoder:
                             dirPoint = c0.startSketchPoint.geometry
                             dist = abs(p1[0])
 
-                        #dirPoint = c0.geometry.center if type(c0) == f.SketchCircle else c0.startSketchPoint.geometry 
+                        #dirPoint = c0.geometry.center if type(c0) == f.SketchCircle else c0.startSketchPoint.geometry
                         oc = self.asObjectCollection(p0)
                         # the direction is set by the dirPoint geometry afaict, so distance is always positive relative to that
                         # this will generate new curves
-                        offsetCurves = self.sketch.offset(oc, dirPoint, dist) 
+                        offsetCurves = self.sketch.offset(oc, dirPoint, dist)
 
                         # now remove matching elements that were generated
                         for rc in p2:
@@ -166,7 +166,7 @@ class SketchDecoder:
         return result
 
 
-    
+
     def generateDimensions(self, dims):
         result = []
         dimensions:f.SketchDimensions = self.sketch.sketchDimensions
@@ -207,21 +207,21 @@ class SketchDecoder:
                 dimension = dimensions.addConcentricCircleDimension(p0,p1,self.asPoint3D(p3))
                 dimension.parameter.expression = p2
             elif kind == "SOC": # SketchOffsetCurvesDimension
-                parameter = self.offsetRefs[p0] 
+                parameter = self.offsetRefs[p0]
                 parameter.expression = p1
 
     def textPoint(self, p0, p1 = None):
         if p1 == None:
             return core.Point3D.create(p0.x + 1,p0.y+1,0)
         else:
-            g0 = TurtleSketch.getMidpoint(p0) if type(p0) == f.SketchLine else p0.geometry 
-            g1 = TurtleSketch.getMidpoint(p1) if type(p1) == f.SketchLine else p1.geometry 
+            g0 = TurtleSketch.getMidpoint(p0) if type(p0) == f.SketchLine else p0.geometry
+            g1 = TurtleSketch.getMidpoint(p1) if type(p1) == f.SketchLine else p1.geometry
             distance = g0.distanceTo(g1)
             angle = -0.5 * math.pi
             offset = distance * 0.2
             mid = core.Point3D.create(g0.x + (g1.x - g0.x)/2.0, g0.y + (g1.y - g0.y)/2.0)
             x = mid.x + offset * math.cos(angle)
-            y = mid.y + offset * math.sin(angle) 
+            y = mid.y + offset * math.sin(angle)
             return core.Point3D.create(x, y, 0)
 
 
@@ -259,15 +259,24 @@ class SketchDecoder:
             for idx in idxs:
                 result.append(self.points[int(idx)])
         return result
-    
+
     def asPoint3D(self, pts):
         result = 0
         if isinstance(pts, Iterable):
-            result = core.Point3D.create(pts[0],pts[1] if len(pts) > 1 else 0,pts[2] if len(pts) > 1 else 0)
+            pts.extend([0.0] * max(0, (3 - len(pts))))
+            tpts = pts #[pts[0],pts[1] if len(pts) > 1 else 0, pts[2] if len(pts) > 2 else 0]
         elif type(pts) == f.SketchPoint:
-            result = pts.geometry
-        return result
-    
+            tpts = [pts.geometry[0],pts.geometry[1],pts.geometry[2]]
+
+        # tpts[0] = tpts[0]*4
+        # tpts[1] = tpts[1]*4+8
+        return core.Point3D.create(tpts[0], tpts[1],tpts[2])
+        # if isinstance(pts, Iterable):
+        #     result = core.Point3D.create(pts[0],pts[1] if len(pts) > 1 else 0,pts[2] if len(pts) > 1 else 0)
+        # elif type(pts) == f.SketchPoint:
+        #     result = pts.geometry
+        # return result
+
     def asObjectCollection(self, items):
         result = core.ObjectCollection.create()
         for item in items:
