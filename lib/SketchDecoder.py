@@ -12,7 +12,8 @@ from .TurtleLayers import TurtleLayers
 f,core,app,ui,design,root = TurtleUtils.initGlobals()
 
 class SketchDecoder:
-    def __init__(self, data):
+    def __init__(self, data, transform = core.Matrix3D.create()):
+        self.transform = transform
         self.sketch:f.Sketch = TurtleUtils.ensureSelectionIsType(f.Sketch)
         if not self.sketch:
             return
@@ -44,6 +45,9 @@ class SketchDecoder:
         self.dimensions = self.generateDimensions(dimensions)
 
     def generatePoints(self, ptVals):
+        (origin, xAxis, yAxis, zAxis) = self.transform.getAsCoordinateSystem()
+        self.hasRotation = xAxis.y != 0 or yAxis.x!= 0
+
         result = []
         for pv in ptVals:
             result.append(self.sketch.sketchPoints.add(self.asPoint3D(pv)))# core.Point3D.create(pv[0]*2+20, pv[1]*2+50, 0)))
@@ -104,12 +108,13 @@ class SketchDecoder:
             p2 = params[2] if len(params) > 2 else None
             try:
                 if(kind == "VH"):
-                    sp = p0.startSketchPoint.geometry
-                    ep = p0.endSketchPoint.geometry
-                    if(abs(sp.x - ep.x) < abs(sp.y - ep.y)):
-                        constraint = constraints.addVertical(p0)
-                    else:
-                        constraint = constraints.addHorizontal(p0)
+                    if not self.hasRotation: # don't set vert/horz if transforming with rotation
+                        sp = p0.startSketchPoint.geometry
+                        ep = p0.endSketchPoint.geometry
+                        if(abs(sp.x - ep.x) < abs(sp.y - ep.y)):
+                            constraint = constraints.addVertical(p0)
+                        else:
+                            constraint = constraints.addHorizontal(p0)
                 elif(kind == "PA"):
                     constraint = constraints.addParallel(p0, p1)
                 elif(kind == "PE"):
@@ -261,21 +266,16 @@ class SketchDecoder:
         return result
 
     def asPoint3D(self, pts):
-        result = 0
         if isinstance(pts, Iterable):
             pts.extend([0.0] * max(0, (3 - len(pts))))
             tpts = pts #[pts[0],pts[1] if len(pts) > 1 else 0, pts[2] if len(pts) > 2 else 0]
         elif type(pts) == f.SketchPoint:
             tpts = [pts.geometry[0],pts.geometry[1],pts.geometry[2]]
-
         # tpts[0] = tpts[0]*4
         # tpts[1] = tpts[1]*4+8
-        return core.Point3D.create(tpts[0], tpts[1],tpts[2])
-        # if isinstance(pts, Iterable):
-        #     result = core.Point3D.create(pts[0],pts[1] if len(pts) > 1 else 0,pts[2] if len(pts) > 1 else 0)
-        # elif type(pts) == f.SketchPoint:
-        #     result = pts.geometry
-        # return result
+        result = core.Point3D.create(tpts[0], tpts[1], tpts[2])
+        result.transformBy(self.transform)
+        return result
 
     def asObjectCollection(self, items):
         result = core.ObjectCollection.create()
