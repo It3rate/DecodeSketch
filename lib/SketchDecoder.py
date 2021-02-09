@@ -29,13 +29,14 @@ class SketchDecoder:
 
     def assessGuidelineTransform(self, data):
         gl = data["Guideline"] if "Dimensions" in data else []
-        self.guideline = [self.asPoint3D(gl[0]),self.asPoint3D(gl[1])] if len(gl) > 1 else []
-        self.guideindex = gl[2] if len(self.guideline) > 2 else -1
+        guidePts = [self.asPoint3D(gl[0]),self.asPoint3D(gl[1])] if len(gl) > 1 else []
         cline:f.SketchLine = self.tsketch.getSingleConstructionLine()
-        if cline and len(self.guideline) > 1:
+        if cline and len(guidePts) > 1:
+            self.guideline = cline
+            self.guideIndex = int(gl[2][1:]) if len(gl) > 2 else -1
             self.transform = core.Matrix3D.create()
-            gl0 = self.guideline[0]
-            gl1 = self.guideline[1]
+            gl0 = guidePts[0]
+            gl1 = guidePts[1]
             cl0 = cline.startSketchPoint.geometry
             cl1 = cline.endSketchPoint.geometry
             
@@ -96,7 +97,13 @@ class SketchDecoder:
                 params = self.parseParams(parse[2:])
                 curve = None
                 if kind == "L":
-                    curve = sketchCurves.sketchLines.addByTwoPoints(params[0], params[1])
+                    if self.guideIndex > -1 and len(result) == self.guideIndex:
+                        # don't duplicate existing guideline
+                        self.replacePoint(params[0], self.guideline.startSketchPoint)
+                        self.replacePoint(params[1], self.guideline.endSketchPoint)
+                        curve = self.guideline
+                    else:
+                        curve = sketchCurves.sketchLines.addByTwoPoints(params[0], params[1])
                 elif kind == "A":
                     curve = sketchCurves.sketchArcs.addByThreePoints(params[0], self.asPoint3D(params[1]), params[2])
                     if len(params) > 2:
@@ -229,18 +236,19 @@ class SketchDecoder:
             p2 = params[2] if len(params) > 2 else None
             p3 = params[3] if len(params) > 3 else None
 
-            if kind == "SLD":
-                dimension = dimensions.addDistanceDimension(p0, p1, orientation,self.asPoint3D(p3))# self.textPoint(p0,p1))
-                dimension.parameter.expression = p2
-            elif kind == "SOD":
-                dimension = dimensions.addOffsetDimension(p0,p1,self.asPoint3D(p3))# self.textPoint(p0,p1))
+            if kind == "SLD": # SketchDistanceDimension
+                if not self.isGuideline(p0, p1):
+                    dimension = dimensions.addDistanceDimension(p0, p1, orientation, self.asPoint3D(p3))
+                    dimension.parameter.expression = p2
+            elif kind == "SOD": # SketchOffsetDimension
+                dimension = dimensions.addOffsetDimension(p0,p1,self.asPoint3D(p3))
                 dimension.parameter.expression = p2
             elif kind == "SAD": # SketchAngularDimension
                 midText = self.textPoint(p0, p1) # this must be mid centers as the quadrant dimensioned is based on the text postion.
                 dimension = dimensions.addAngularDimension(p0,p1, midText)
                 dimension.parameter.expression = p2
-            elif kind == "SDD":
-                dimension = dimensions.addDiameterDimension(p0, self.asPoint3D(p2)) # self.textPoint(p0.geometry.center))
+            elif kind == "SDD": # SketchDiameterDimension
+                dimension = dimensions.addDiameterDimension(p0, self.asPoint3D(p2)) 
                 dimension.parameter.expression = p1
             elif kind == "SRD": # SketchRadialDimension
                 dimension = dimensions.addRadialDimension(p0, self.asPoint3D(p2))
@@ -257,6 +265,12 @@ class SketchDecoder:
             elif kind == "SOC": # SketchOffsetCurvesDimension
                 parameter = self.offsetRefs[p0]
                 parameter.expression = p1
+
+    def isGuideline(self, p0, p1):
+        gl = self.guideline
+        startMatch = gl.startSketchPoint == p0 or gl.startSketchPoint == p1
+        endMatch = gl.endSketchPoint == p0 or gl.endSketchPoint == p1
+        return gl and startMatch and endMatch
 
     def textPoint(self, p0, p1 = None):
         if p1 == None:
