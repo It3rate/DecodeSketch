@@ -27,6 +27,48 @@ class SketchDecoder:
 
         TurtleUtils.selectEntity(self.sketch)
 
+        
+    def decodeSketchData(self, data):
+        self.params = data["Params"] if "Params" in data else {}
+        self.pointValues = data["Points"] if "Points" in data else []
+        self.chainValues = data["Chains"] if "Chains" in data else []
+        self.constraintValues = data["Constraints"] if "Constraints" in data else []
+        self.dimensionValues = data["Dimensions"] if "Dimensions" in data else []
+        self.assessDimensionNames()
+
+    def decodeFromSketch(self):
+        self.offsetRefs = {}
+        self.forwardExpressions = {}
+        self.points = self.generatePoints(self.pointValues)
+        self.curves = self.generateCurves(self.chainValues)
+        self.constraints = self.generateConstraints(self.constraintValues)
+        for name in self.params:
+            self.addUserParam(name)
+
+        self.dimensions = self.generateDimensions(self.dimensionValues)
+    
+    def addUserParam(self, name, currentDimIndex:int = -1):
+        forwardRefs = []
+        encoding = self.parseDParam(self.params[name], forwardRefs)
+        if(len(forwardRefs) > 0):
+            lastRef:int = forwardRefs[-1]
+            if lastRef in self.forwardExpressions:
+                self.forwardExpressions[lastRef].append(name)  
+            else:
+                self.forwardExpressions[lastRef] = [name]
+        else:
+            self.tparams.addParam(name, encoding)
+
+
+    def assessDimensionNames(self):
+        self.addedDimensions = []
+        self.dimensionNameMap = []
+        idx = 0
+        for dim in self.dimensionValues:
+            regex = re.compile("(?<![a-zA-Z0-9_])__" + str(idx) + "(?![a-zA-Z0-9_])")
+            self.dimensionNameMap.append(regex)
+            idx += 1
+
     def assessGuidelineTransform(self, data):
         gl = data["Guideline"] if "Dimensions" in data else []
         guidePts = [self.asPoint3D(gl[0]),self.asPoint3D(gl[1])] if len(gl) > 1 else []
@@ -55,27 +97,6 @@ class SketchDecoder:
                 vc(0,0,1)
             )
         
-        
-    def decodeSketchData(self, data):
-        if "Params" in data:
-            params = data["Params"]
-            for p in params:
-                self.tparams.addParam(p, params[p])
-        else:
-            params = {}
-
-        self.pointValues = data["Points"] if "Points" in data else []
-        self.chainValues = data["Chains"] if "Chains" in data else []
-        self.constraintValues = data["Constraints"] if "Constraints" in data else []
-        self.dimensionValues = data["Dimensions"] if "Dimensions" in data else []
-
-    def decodeFromSketch(self):
-        self.offsetRefs = {}
-        self.points = self.generatePoints(self.pointValues)
-        self.curves = self.generateCurves(self.chainValues)
-        self.constraints = self.generateConstraints(self.constraintValues)
-        self.dimensions = self.generateDimensions(self.dimensionValues)
-
     def generatePoints(self, ptVals):
         (origin, xAxis, yAxis, zAxis) = self.transform.getAsCoordinateSystem()
         self.hasRotation = xAxis.y != 0 or yAxis.x!= 0
@@ -231,12 +252,13 @@ class SketchDecoder:
 
 
     def generateDimensions(self, dims):
-        result = []
         dimensions:f.SketchDimensions = self.sketch.sketchDimensions
+        idx = 0
+        paramIndex = 0
         for dim in dims:
             dimension = None
             orientation = f.DimensionOrientations.AlignedDimensionOrientation
-            parse = re.findall(r"(SLD|SOD|SAD|SDD|SRD|SMA|SMI|SCC|SOC)([pcvo][^pcvo]*)([pcvo][^pcvo]*)?([pcvo][^pcvo]*)?([pcvo][^pcvo]*)?", dim)[0]
+            parse = re.findall(r"(SLD|SOD|SAD|SDD|SRD|SMA|SMI|SCC|SOC)([pcvo][^pcvod]*|d\[[^\]]*\])([pcvo][^pcvod]*|d\[[^\]]*\])?([pcvo][^pcvod]*|d\[[^\]]*\])?([pcvo][^pcvod]*|d\[[^\]]*\])?", dim)[0]
             kind = parse[0]
             params = self.parseParams(parse[1:])
             p0 = params[0]
@@ -273,6 +295,13 @@ class SketchDecoder:
             elif kind == "SOC": # SketchOffsetCurvesDimension
                 parameter = self.offsetRefs[p0]
                 parameter.expression = p1
+                
+            self.addedDimensions.append(dimension)
+            if idx in self.forwardExpressions:
+                for name in self.forwardExpressions[idx]:
+                    self.addUserParam(name)
+
+            idx += 1
 
     def isGuideline(self, p0, p1):
         result = False
@@ -281,6 +310,12 @@ class SketchDecoder:
             startMatch = gl.startSketchPoint == p0 or gl.startSketchPoint == p1
             endMatch = gl.endSketchPoint == p0 or gl.endSketchPoint == p1
             result = gl and startMatch and endMatch
+        return result
+
+    def encodeExpression(self, expr):
+        result = expr
+        for regPair in self.dimensionNameMap.values():
+            result = regPair[0].sub(regPair[1], result)
         return result
 
     def textPoint(self, p0, p1 = None):
@@ -319,6 +354,8 @@ class SketchDecoder:
                 result = ast.literal_eval(val) # self.parseNums(val)
             else:
                 result = val
+        elif kind == "d": # curve
+            result = self.parseDParam(val)
         elif kind == "o": # object index (so far just used for tracking offset constraints)
             result = int(val)
         elif kind == "a": # list of curve indexes
@@ -331,6 +368,22 @@ class SketchDecoder:
             idxs = val.split("|")
             for idx in idxs:
                 result.append(self.points[int(idx)])
+        return result
+
+    def parseDParam(self, dParam:str,  forwardRefs = []):
+        firstD = dParam.index('[') + 1
+        result = dParam[firstD:-1] # strip the outsides of d[...] or [...]
+        validIndex = len(self.addedDimensions)
+        idx = 0
+        for regex in self.dimensionNameMap:
+            if regex.search(result):
+                if validIndex > idx:
+                    name = self.addedDimensions[idx].parameter.name
+                    result = regex.sub(name, result)
+                else:
+                    forwardRefs.append(idx)
+                    print("forward ref in: " + dParam)
+            idx += 1
         return result
 
     def asPoint3D(self, pts):

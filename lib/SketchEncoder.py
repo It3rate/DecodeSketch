@@ -44,6 +44,8 @@ class SketchEncoder:
         self.usedParams = []
         self.params = tparams.getUserParams()
 
+        self.assessDimensionNames()
+
         self.parseAllPoints()
         self.pointKeys = list(self.points)
         self.pointValues = list(self.points.values())
@@ -85,6 +87,14 @@ class SketchEncoder:
         print(result)
         print("\n\nSketch data is now on clipboard.")
     
+    def assessDimensionNames(self):
+        self.dimensionNameMap = {}
+        dimensions:f.SketchDimensions = self.sketch.sketchDimensions
+        idx = 0
+        for dim in dimensions:
+            name = dim.parameter.name
+            regex = re.compile("(?<![a-zA-Z0-9_])" + name + "(?![a-zA-Z0-9_])")
+            self.dimensionNameMap[name] = [regex, "__" + str(idx)]
 
     def parseAllPoints(self):
         for point in self.sketch.sketchPoints:
@@ -147,7 +157,7 @@ class SketchEncoder:
     def encodeParams(self):
         result = ""
         for key in self.usedParams:
-            result += "\'" + key + "\':\'" + self.params[key] + "\'\n"
+            result += "\'" + key + "\':\'" + self.encodeParameter(self.params[key]) + "\'\n"
         return result
 
     def encodeCurve(self, curve:f.SketchCurve):
@@ -224,46 +234,62 @@ class SketchEncoder:
     def encodeDimension(self, dim:f.SketchDimension):
         result = ""
         tp = type(dim)
+        parameter = self.encodeParameter(dim.parameter.expression)
         if(tp == f.SketchLinearDimension):
             tdim:f.SketchLinearDimension = dim # DistanceDimension
-            result = "SLD" + self.encodeEntities(tdim.entityOne,tdim.entityTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SLD" + self.encodeEntities(tdim.entityOne,tdim.entityTwo) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchOffsetDimension):
             tdim:f.SketchOffsetDimension = dim
-            result = "SOD" + self.encodeEntities(tdim.line,tdim.entityTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SOD" + self.encodeEntities(tdim.line,tdim.entityTwo) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchAngularDimension):
             tdim:f.SketchAngularDimension = dim
-            result = "SAD" + self.encodeEntities(tdim.lineOne,tdim.lineTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SAD" + self.encodeEntities(tdim.lineOne,tdim.lineTwo) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchDiameterDimension):
             tdim:f.SketchDiameterDimension = dim
-            result = "SDD" + self.encodeEntities(tdim.entity) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SDD" + self.encodeEntities(tdim.entity) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchRadialDimension):
             tdim:f.SketchRadialDimension = dim
-            result = "SRD" + self.encodeEntities(tdim.entity) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SRD" + self.encodeEntities(tdim.entity) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchEllipseMajorRadiusDimension):
             tdim:f.SketchEllipseMajorRadiusDimension = dim
-            result = "SMA" + self.encodeEntities(tdim.ellipse) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SMA" + self.encodeEntities(tdim.ellipse) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchEllipseMinorRadiusDimension):
             tdim:f.SketchEllipseMinorRadiusDimension = dim
-            result = "SMI" + self.encodeEntities(tdim.ellipse) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SMI" + self.encodeEntities(tdim.ellipse) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchConcentricCircleDimension):
             tdim:f.SketchConcentricCircleDimension = dim
-            result = "SCC" + self.encodeEntities(tdim.circleOne,tdim.circleTwo) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SCC" + self.encodeEntities(tdim.circleOne,tdim.circleTwo) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchOffsetCurvesDimension):
             tdim:f.SketchOffsetCurvesDimension = dim
-            result = "SOC" + self.encodeEntities(tdim.offsetConstraint) + self.encodeExpressions(tdim.parameter, tdim.textPosition)
+            result = "SOC" + self.encodeEntities(tdim.offsetConstraint) + parameter + self.encodeExpressions(tdim.textPosition)
 
         else:
             print("*** Dimension not parsed: " + str(tp))
 
         return result
+
+    def encodeParameter(self, expr:str):
+        result = expr
+        self.checkExpressionForUserParam(result)
+        # convert internal dimension references to __index format
+        for regPair in self.dimensionNameMap.values():
+            result = regPair[0].sub(regPair[1], result)
+        return "d[" + result + "]"
+
+    # check if expression contains a user variable
+    def checkExpressionForUserParam(self, expr:str):
+        for pname in self.params:
+            match = re.search("(?<![a-zA-Z0-9_])" + pname + "(?![a-zA-Z0-9_])", expr)
+            if match and (not pname in self.usedParams):
+                self.usedParams.append(pname)
 
     def encodeEntities(self, *points):
         result = ""
@@ -322,10 +348,12 @@ class SketchEncoder:
         if tp is float or tp is int:
             result += "[" + TurtleUtils.round(expr) + "]"
         elif tp is f.ModelParameter:
-            p = str(expr.expression).replace(" ", "")
+            p = str(expr.expression)
             result += p
-            if (p in self.params) and (not p in self.usedParams):
-                self.usedParams.append(p)
+            for pname in self.params:
+                match = re.search("(?<![a-zA-Z0-9_])" + pname + "(?![a-zA-Z0-9_])", p)
+                if match and (not pname in self.usedParams):
+                    self.usedParams.append(pname)
         else:
             result += self.encodePoint(expr)
         return result
