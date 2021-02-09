@@ -237,7 +237,7 @@ class SketchEncoder:
         parameter = self.encodeParameter(dim.parameter.expression)
         if(tp == f.SketchLinearDimension):
             tdim:f.SketchLinearDimension = dim # DistanceDimension
-            result = "SLD" + self.encodeEntities(tdim.entityOne,tdim.entityTwo) + parameter + self.encodeExpressions(tdim.textPosition)
+            result = "SLD" + self.encodeEntities(tdim.entityOne,tdim.entityTwo) + self.encodeEnum(tdim.orientation) + parameter + self.encodeExpressions(tdim.textPosition)
 
         elif(tp == f.SketchOffsetDimension):
             tdim:f.SketchOffsetDimension = dim
@@ -328,6 +328,9 @@ class SketchEncoder:
             result = self.encodeExpression(entity)
 
         return result
+
+    def encodeEnum(self, enumVal):
+        return "e" + str(int(enumVal))
 
     def encodeExpressions(self, *expressions):
         result = ""

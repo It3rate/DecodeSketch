@@ -258,18 +258,19 @@ class SketchDecoder:
         for dim in dims:
             dimension = None
             orientation = f.DimensionOrientations.AlignedDimensionOrientation
-            parse = re.findall(r"(SLD|SOD|SAD|SDD|SRD|SMA|SMI|SCC|SOC)([pcvo][^pcvod]*|d\[[^\]]*\])([pcvo][^pcvod]*|d\[[^\]]*\])?([pcvo][^pcvod]*|d\[[^\]]*\])?([pcvo][^pcvod]*|d\[[^\]]*\])?", dim)[0]
+            parse = re.findall(r"(SLD|SOD|SAD|SDD|SRD|SMA|SMI|SCC|SOC)([pcvo][^pcvod]*|d\[[^\]]*\])([pcvoe][^pcvoed]*|d\[[^\]]*\])?([pcvoe][^pcvoed]*|d\[[^\]]*\])?([pcvoe][^pcvoed]*|d\[[^\]]*\])?([pcvoe][^pcvoed]*|d\[[^\]]*\])?", dim)[0]
             kind = parse[0]
             params = self.parseParams(parse[1:])
             p0 = params[0]
             p1 = params[1] if len(params) > 1 else None
             p2 = params[2] if len(params) > 2 else None
             p3 = params[3] if len(params) > 3 else None
+            p4 = params[4] if len(params) > 4 else None
 
             if kind == "SLD": # SketchDistanceDimension
                 if not self.isGuideline(p0, p1):
-                    dimension = dimensions.addDistanceDimension(p0, p1, orientation, self.asPoint3D(p3))
-                    dimension.parameter.expression = p2
+                    dimension = dimensions.addDistanceDimension(p0, p1, p2, self.asPoint3D(p4))
+                    dimension.parameter.expression = p3
             elif kind == "SOD": # SketchOffsetDimension
                 dimension = dimensions.addOffsetDimension(p0,p1,self.asPoint3D(p3))
                 dimension.parameter.expression = p2
@@ -349,6 +350,8 @@ class SketchDecoder:
             result = self.points[int(val)]
         elif kind == "c": # curve
             result = self.curves[int(val)]
+        elif kind == "e": # enum
+            result = int(val)
         elif kind == "v": # array of values
             if val.startswith("["):
                 result = ast.literal_eval(val) # self.parseNums(val)
@@ -382,7 +385,6 @@ class SketchDecoder:
                     result = regex.sub(name, result)
                 else:
                     forwardRefs.append(idx)
-                    print("forward ref in: " + dParam)
             idx += 1
         return result
 
