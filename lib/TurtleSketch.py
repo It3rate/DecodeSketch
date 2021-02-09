@@ -198,7 +198,7 @@ class TurtleSketch:
         for line in lines:
             isTouched = False
             for t in touched:
-                if TurtlePath.isEquivalentLine(t, line):
+                if TurtlePath.isEquivalentCurve(t, line):
                     isTouched = True
                     break
             if not isTouched:

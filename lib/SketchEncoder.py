@@ -88,8 +88,8 @@ class SketchEncoder:
 
     def parseAllPoints(self):
         for point in self.sketch.sketchPoints:
+            self.points[point.entityToken] = point
             if point.connectedEntities and point.connectedEntities.count > 0:
-                self.points[point.entityToken] = point
                 if(point.geometry.x < self.bounds[0].x):
                     self.bounds[0].x = point.geometry.x
                 if(point.geometry.y < self.bounds[0].y):

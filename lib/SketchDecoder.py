@@ -31,9 +31,10 @@ class SketchDecoder:
         gl = data["Guideline"] if "Dimensions" in data else []
         guidePts = [self.asPoint3D(gl[0]),self.asPoint3D(gl[1])] if len(gl) > 1 else []
         cline:f.SketchLine = self.tsketch.getSingleConstructionLine()
+        self.guideline = cline
+        self.guideIndex = -1
         if cline and len(guidePts) > 1:
-            self.guideline = cline
-            self.guideIndex = int(gl[2][1:]) if len(gl) > 2 else -1
+            self.guideIndex = int(gl[2][1:])
             self.transform = core.Matrix3D.create()
             gl0 = guidePts[0]
             gl1 = guidePts[1]
@@ -80,8 +81,14 @@ class SketchDecoder:
         self.hasRotation = xAxis.y != 0 or yAxis.x!= 0
 
         result = []
+        idx = 0
         for pv in ptVals:
-            result.append(self.sketch.sketchPoints.add(self.asPoint3D(pv)))# core.Point3D.create(pv[0]*2+20, pv[1]*2+50, 0)))
+            pt = self.asPoint3D(pv)
+            if idx == 0 and pv[0] == 0 and pv[1] == 0:
+                result.append(self.sketch.sketchPoints.item(0))
+            else:
+                result.append(self.sketch.sketchPoints.add(pt))
+            idx += 1
         return result
 
     def generateCurves(self, chains):
@@ -196,6 +203,7 @@ class SketchDecoder:
                         else:
                             dirPoint = c0.startSketchPoint.geometry
                             dist = abs(p1[0])
+                        dirPoint.transformBy(self.transform)
 
                         #dirPoint = c0.geometry.center if type(c0) == f.SketchCircle else c0.startSketchPoint.geometry
                         oc = self.asObjectCollection(p0)
@@ -206,7 +214,7 @@ class SketchDecoder:
                         # now remove matching elements that were generated
                         for rc in p2:
                             for curve in offsetCurves:
-                                if(TurtlePath.isEquivalentLine(curve, rc, 0.01)):
+                                if(TurtlePath.isEquivalentCurve(curve, rc, 0.01)):
                                     idx = self.curves.index(rc)
                                     self.curves[idx] = curve
                                     rc.deleteMe()
@@ -267,10 +275,13 @@ class SketchDecoder:
                 parameter.expression = p1
 
     def isGuideline(self, p0, p1):
-        gl = self.guideline
-        startMatch = gl.startSketchPoint == p0 or gl.startSketchPoint == p1
-        endMatch = gl.endSketchPoint == p0 or gl.endSketchPoint == p1
-        return gl and startMatch and endMatch
+        result = False
+        if self.guideline:
+            gl = self.guideline
+            startMatch = gl.startSketchPoint == p0 or gl.startSketchPoint == p1
+            endMatch = gl.endSketchPoint == p0 or gl.endSketchPoint == p1
+            result = gl and startMatch and endMatch
+        return result
 
     def textPoint(self, p0, p1 = None):
         if p1 == None:
@@ -328,8 +339,6 @@ class SketchDecoder:
             tpts = pts #[pts[0],pts[1] if len(pts) > 1 else 0, pts[2] if len(pts) > 2 else 0]
         elif type(pts) == f.SketchPoint:
             tpts = [pts.geometry[0],pts.geometry[1],pts.geometry[2]]
-        # tpts[0] = tpts[0]*4
-        # tpts[1] = tpts[1]*4+8
         result = core.Point3D.create(tpts[0], tpts[1], tpts[2])
         result.transformBy(self.transform)
         return result
