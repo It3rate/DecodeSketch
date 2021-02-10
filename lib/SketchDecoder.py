@@ -82,6 +82,7 @@ class SketchDecoder:
         cline:f.SketchLine = self.tsketch.getSingleConstructionLine()
         self.guideline = cline
         self.guideIndex = -1
+        self.guideScale = 1.0
         if cline and len(guidePts) > 1:
             self.guideIndex = int(gl[2][1:])
             gl0 = guidePts[0]
@@ -106,6 +107,7 @@ class SketchDecoder:
                 vc(destVec.y,-destVec.x,0),
                 vc(0,0,1)
             )
+            self.guideScale = destVec.length / gVec.length
 
         
     def generatePoints(self, ptVals):
@@ -115,11 +117,19 @@ class SketchDecoder:
         result = []
         idx = 0
         for pv in ptVals:
+            isFixed = False
+            if len(pv) > 2 and pv[2] == 'f':
+                isFixed = True
+                pv.pop()
+                
             pt = self.asPoint3D(pv)
             if idx == 0 and pv[0] == 0 and pv[1] == 0:
                 result.append(self.sketch.sketchPoints.item(0))
             else:
                 result.append(self.sketch.sketchPoints.add(pt))
+
+            result[-1].isFixed = isFixed
+            
             idx += 1
         return result
 
@@ -130,10 +140,12 @@ class SketchDecoder:
             segs = chain.split(" ")
             for seg in segs:
                 # can't capture repeating groups with re, so max 4 params. Use pip regex to improve, but sticking with this for now. Could put it in a loop as well.
-                parse = re.findall(r"([LACEOF])(x?)([pvas][0-9\[\]\.\-,|]*)([pvas][0-9\[\]\.\-,|]*)?([pvas][0-9\[\]\.\-,|]*)?([pvas][0-9\[\]\.\-,|]*)?", seg)[0]
-                kind = parse[0]
-                isConstruction = parse[1] == "x"
-                params = self.parseParams(parse[2:])
+                parse = re.findall(r"([xX])([fF])([LACEOS])([pvase][0-9\[\]\.\-,|]*)([pvase][0-9\[\]\.\-,|]*)?([pvase][0-9\[\]\.\-,|]*)?([pvase][0-9\[\]\.\-,|]*)?", seg)[0]
+                
+                isConstruction = parse[0] == "x"
+                isFixed = parse[1] == "f"
+                kind = parse[2]
+                params = self.parseParams(parse[3:])
                 curve = None
                 if kind == "L":
                     if self.guideIndex > -1 and len(result) == self.guideIndex:
@@ -148,17 +160,20 @@ class SketchDecoder:
                     if len(params) > 2:
                         self.replacePoint(params[3], curve.centerSketchPoint)
                 elif kind == "C":
-                    curve = sketchCurves.sketchCircles.addByCenterRadius(params[0], params[1][0])
+                    curve = sketchCurves.sketchCircles.addByCenterRadius(params[0], params[1][0] * self.guideScale)
                 elif kind == "E":
                     curve = sketchCurves.sketchEllipses.add(params[0], self.asPoint3D(params[1]), self.asPoint3D(params[2]))
                 elif kind == "O":
                     # seems there is no add for conic curves yet?
                     #curve = sketchCurves.sketchConicCurves.add()
                     pass
-                elif kind == "F":
+                elif kind == "S":
+                    splinePoints = params[0]
+                    if params[1] != 0: # check if closed
+                        splinePoints.append(splinePoints[0])
                     pts = self.asObjectCollection(params[0])
-                    spline = sketchCurves.sketchFittedSplines.add(pts)
-                    fitPoints = spline.fitPoints
+                    curve = sketchCurves.sketchFittedSplines.add(pts)
+                    fitPoints = curve.fitPoints
                     count = 0
                     for pt in params[0]:
                         self.replacePoint(pt, fitPoints.item(count))
@@ -169,6 +184,7 @@ class SketchDecoder:
 
                 if curve:
                     curve.isConstruction = isConstruction
+                    curve.isFixed = isFixed
                     result.append(curve)
         return result
     
@@ -399,12 +415,19 @@ class SketchDecoder:
             idx += 1
         return result
 
+    def asPoint3Ds(self, pts):
+        result = []
+        for pt in pts:
+            result.append(self.asPoint3D(pt))
+        return result
+
     def asPoint3D(self, pts):
         if isinstance(pts, Iterable):
-            pts.extend([0.0] * max(0, (3 - len(pts))))
-            tpts = pts #[pts[0],pts[1] if len(pts) > 1 else 0, pts[2] if len(pts) > 2 else 0]
+            #tpts = [pts[0], pts[1], 0]
+            pts.extend([0.0] * max(0, (3 - len(pts)))) # ensure three elements
+            tpts = pts
         elif type(pts) == f.SketchPoint:
-            tpts = [pts.geometry[0],pts.geometry[1],pts.geometry[2]]
+            tpts = [pts.geometry.x,pts.geometry.y,pts.geometry.z]
         result = core.Point3D.create(tpts[0], tpts[1], tpts[2])
         result.transformBy(self.transform)
         return result
