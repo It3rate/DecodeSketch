@@ -158,24 +158,26 @@ class SketchEncoder:
     def encodeCurve(self, curve:f.SketchCurve):
         result = ""
         tp = type(curve)
-        isConstruction = "x" if curve.isConstruction else ""
+        result += "x" if curve.isConstruction else "X"
+        result += "f" if curve.isFixed else "F"
 
         if tp is f.SketchLine:
-            result = "L" + isConstruction + self.encodeEntities(curve.startSketchPoint, curve.endSketchPoint)
+            result += "L"  + self.encodeEntities(curve.startSketchPoint, curve.endSketchPoint)
             if curve.isConstruction and not self.guideline:
                 self.guideline = curve
         elif tp is f.SketchArc:
             pointOnLine = TurtleSketch.getMidpoint(curve)
             #return "A" + ctrn + self.encodeEntities(curve.centerSketchPoint, curve.startSketchPoint, curve.endSketchPoint) + self.encodeExpression(curve.geometry.endAngle)
-            return "A" + isConstruction + self.encodeEntities(curve.startSketchPoint) + self.encodeExpression(pointOnLine) + self.encodeEntities(curve.endSketchPoint, curve.centerSketchPoint) 
+            result += "A" + self.encodeEntities(curve.startSketchPoint) + self.encodeExpression(pointOnLine) + self.encodeEntities(curve.endSketchPoint, curve.centerSketchPoint) 
         elif tp is f.SketchCircle:
-            result = "C" + isConstruction + self.encodeEntities(curve.centerSketchPoint) + self.encodeExpression(curve.radius)
+            result += "C" + self.encodeEntities(curve.centerSketchPoint) + self.encodeExpression(curve.radius)
         elif tp is f.SketchEllipse:
-            result = "E" + isConstruction + self.encodeEntities(curve.centerSketchPoint, curve.majorAxisLine.startSketchPoint, curve.minorAxisLine.startSketchPoint)
+            result += "E" + self.encodeEntities(curve.centerSketchPoint, curve.majorAxisLine.startSketchPoint, curve.minorAxisLine.startSketchPoint)
         elif tp is f.SketchConicCurve:
-            result = "O" + isConstruction + self.encodeEntities(curve.startSketchPoint, curve.apexSketchPoint, curve.endSketchPoint) + self.encodeExpressions(curve.length)
+            result += "O" + self.encodeEntities(curve.startSketchPoint, curve.apexSketchPoint, curve.endSketchPoint) + self.encodeExpressions(curve.length)
         elif tp is f.SketchFittedSpline:
-            result = "F" + isConstruction + self.encodeEntities(curve.fitPoints) #note: control point splines are not supported, only fixed point splines work.
+            #note: control point splines are not supported, only fixed point splines work.
+            result += "S" + self.encodeEntities(curve.fitPoints) + self.encodeEnum(curve.isClosed) 
         else: 
             print("*** Curve not parsed: " + str(tp))
         return result
@@ -400,9 +402,12 @@ class SketchEncoder:
         tp = type(pt)
         x = 0.0
         y = 0.0
+        isFixed = ""
         if tp is f.SketchPoint:
             x = pt.geometry.x
             y = pt.geometry.y
+            if pt.isFixed:
+                isFixed = ",\'f\'"
         elif tp is core.Point2D or tp is core.Vector2D:
             x = pt.x
             y = pt.y
@@ -410,7 +415,7 @@ class SketchEncoder:
             x = pt.x
             y = pt.y # ignore z unless extending to 3D sketches
         
-        result += "["+TurtleUtils.round(x)+","+TurtleUtils.round(y)+"]"
+        result += "["+TurtleUtils.round(x)+","+TurtleUtils.round(y) + isFixed + "]"
         return result
         
     def encodeChains(self, chains):
