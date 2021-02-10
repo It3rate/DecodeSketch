@@ -12,8 +12,7 @@ from .TurtleLayers import TurtleLayers
 f,core,app,ui,design,root = TurtleUtils.initGlobals()
 
 class SketchDecoder:
-    def __init__(self, data, transform = core.Matrix3D.create()):
-        self.transform = transform
+    def __init__(self, data, transform = core.Matrix3D.create(), flipX = False, flipY = False):
         self.sketch:f.Sketch = TurtleUtils.ensureSelectionIsType(f.Sketch)
         if not self.sketch:
             return
@@ -21,7 +20,15 @@ class SketchDecoder:
         self.tsketch = self.tcomponent.activeSketch
         self.tparams = TurtleParams.instance()
 
-        self.assessGuidelineTransform(data)
+        # It doesn't make sense to map transforms, as the sketch transform in fusion isn't constant.
+        # Tt will be based on where the camera is when entering the sketch, so just use identity, and allow flipping.
+        self.transform = transform
+        self.flipX = flipX
+        self.flipY = flipY
+        self.assessGuidelineTransform(data) # align to selected guideline
+
+        print(str(self.transform.asArray()))
+
         self.decodeSketchData(data)
         self.decodeFromSketch()
 
@@ -70,32 +77,36 @@ class SketchDecoder:
             idx += 1
 
     def assessGuidelineTransform(self, data):
-        gl = data["Guideline"] if "Dimensions" in data else []
+        gl = data["Guideline"] if "Guideline" in data else []
         guidePts = [self.asPoint3D(gl[0]),self.asPoint3D(gl[1])] if len(gl) > 1 else []
         cline:f.SketchLine = self.tsketch.getSingleConstructionLine()
         self.guideline = cline
         self.guideIndex = -1
         if cline and len(guidePts) > 1:
             self.guideIndex = int(gl[2][1:])
-            self.transform = core.Matrix3D.create()
             gl0 = guidePts[0]
             gl1 = guidePts[1]
             cl0 = cline.startSketchPoint.geometry
             cl1 = cline.endSketchPoint.geometry
             
             vc = core.Vector3D.create
-            orgVec = vc((gl1.x-gl0.x), (gl1.y - gl0.y), 0)
+            gVec = vc((gl1.x-gl0.x), (gl1.y - gl0.y), 0)
             destVec = vc((cl1.x-cl0.x), (cl1.y - cl0.y), 0)
+            # adjust original encoded guideline to create flips
+            gOrigin = gl1 if self.flipX else gl0
+            gxVec = vc(-gVec.x, -gVec.y, 0) if self.flipX else gVec
+            gyVec = vc(-gVec.y,gVec.x,0) if self.flipY else vc(gVec.y,-gVec.x,0)
             self.transform.setToAlignCoordinateSystems(
-                gl0, 
-                orgVec,
-                vc(orgVec.y,-orgVec.x,0),
+                gOrigin, 
+                gxVec,
+                gyVec,
                 vc(0,0,1),
                 cl0, 
                 destVec,
                 vc(destVec.y,-destVec.x,0),
                 vc(0,0,1)
             )
+
         
     def generatePoints(self, ptVals):
         (origin, xAxis, yAxis, zAxis) = self.transform.getAsCoordinateSystem()
@@ -118,7 +129,7 @@ class SketchDecoder:
         for chain in chains:
             segs = chain.split(" ")
             for seg in segs:
-                # can't capture repeating groups with re, so max 4 params. Use pip regex to improve
+                # can't capture repeating groups with re, so max 4 params. Use pip regex to improve, but sticking with this for now. Could put it in a loop as well.
                 parse = re.findall(r"([LACEOF])(x?)([pvas][0-9\[\]\.\-,|]*)([pvas][0-9\[\]\.\-,|]*)?([pvas][0-9\[\]\.\-,|]*)?([pvas][0-9\[\]\.\-,|]*)?", seg)[0]
                 kind = parse[0]
                 isConstruction = parse[1] == "x"

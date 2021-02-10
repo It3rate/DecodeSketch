@@ -66,20 +66,21 @@ class SketchEncoder:
         self.data["Constraints"] = self.constraints.values()
         self.data["Dimensions"] = self.dimensions.values()
 
-        result = ("#Turtle Generated Data\n{\n")
-        result += ("\'Params\':{\n" + self.encodeParams() + "},\n")
-        result += ("\'PointBounds\':[" + self.encodePoints(self.bounds[0], self.bounds[1]) + "],\n")
-        result += ("\'Points\':[\n" + self.encodePoints(*self.data["Points"]) + "\n],\n")
-        result += ("\'Chains\':[\n" + self.encodeChains(self.data["Chains"]) + "\n],\n")
+        result = "#Turtle Generated Data\n{\n"
+        result += "\'CoordinateSystem\':" + self.encodeList(self.sketch.transform.asArray(), False, 4) + ",\n"
+        result += "\'Params\':{\n" + self.encodeParams() + "},\n"
+        result += "\'PointBounds\':[" + self.encodePoints(self.bounds[0], self.bounds[1]) + "],\n"
+        result += "\'Points\':[\n" + self.encodePoints(*self.data["Points"]) + "\n],\n"
+        result += "\'Chains\':[\n" + self.encodeChains(self.data["Chains"]) + "\n],\n"
         if len(self.data["Constraints"]) > 0:
-            result += ("\'Constraints\':[\n\'" + "\',\'".join(self.data["Constraints"]) + "\'\n],\n")
+            result += "\'Constraints\':" + self.encodeList(self.data["Constraints"]) + ",\n" #               [\n\'" + "\',\'".join(self.data["Constraints"]) + "\'\n],\n")
         if len(self.data["Dimensions"]) > 0:
-            result += ("\'Dimensions\':[\n\'" + "\',\'".join(self.data["Dimensions"]) + "\'\n],\n")
+            result += "\'Dimensions\':" + self.encodeList(self.data["Dimensions"]) + ",\n" #             [\n\'" + "\',\'".join(self.data["Dimensions"]) + "\'\n],\n")
         if self.guideline:
-            result += ("\'Guideline\':[" + self.encodePoints(self.guideline) + ",\'" + self.encodeEntity(self.guideline) + "\']\n")
+            result += "\'Guideline\':[" + self.encodePoints(self.guideline) + ",\'" + self.encodeEntity(self.guideline) + "\']\n"
         else: 
             result += "\'Guideline\':[]\n" 
-        result += ("}\n\n")
+        result += "}\n\n"
 
 
         TurtleUtils.setClipboardText(result)
@@ -153,12 +154,6 @@ class SketchEncoder:
 
     def linePointIndexes(self, line:f.SketchLine):
         return [self.pointIndex(line.startSketchPoint.entityToken), self.pointIndex(line.endSketchPoint.entityToken)]
-
-    def encodeParams(self):
-        result = ""
-        for key in self.usedParams:
-            result += "\'" + key + "\':\'" + self.encodeParameter(self.params[key]) + "\'\n"
-        return result
 
     def encodeCurve(self, curve:f.SketchCurve):
         result = ""
@@ -276,6 +271,26 @@ class SketchEncoder:
 
         return result
 
+    def encodeList(self, items, asStrings = True, lineStep = 5):
+        result = "[" if lineStep == 0 else "[\n"
+        quote = "\'" if asStrings else ""
+        comma = ""
+        idx = 0
+        for item in items:
+            result += comma + quote + str(item) + quote
+            comma = ",\t"
+            idx += 1
+            if lineStep > 0 and idx % lineStep == 0:
+                comma = ", # " + str(idx - lineStep) + " - " + str(idx - 1) + "\n"
+        result += "]" if lineStep == 0 else "\n]"
+        return result
+
+    def encodeParams(self):
+        result = ""
+        for key in self.usedParams:
+            result += "\'" + key + "\':\'" + self.encodeParameter(self.params[key]) + "\'\n"
+        return result
+
     def encodeParameter(self, expr:str):
         result = expr
         self.checkExpressionForUserParam(result)
@@ -361,11 +376,10 @@ class SketchEncoder:
             result += self.encodePoint(expr)
         return result
 
-    def encodePoints(self, *points):
+    def encodePoints(self, *points, lineStep = 5):
         result = ""
         if not points:
             return result
-        lineStep = 5
         comma = ""
         idx = 0
         for pt in points:
@@ -375,7 +389,7 @@ class SketchEncoder:
                 result += comma + self.encodePoint(pt)
             comma=",\t"
             idx += 1
-            if idx % lineStep == 0:
+            if lineStep > 0 and idx % lineStep == 0:
                 comma = ", # " + str(idx - lineStep) + " - " + str(idx - 1) + "\n"
         return result
 
